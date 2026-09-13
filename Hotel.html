@@ -185,6 +185,8 @@
             <option value="H">H — Hilton</option>
             <option value="Y">Y — Hyatt</option>
             <option value="I">I — IHG</option>
+            <option value="W">W — Wyndham</option>
+            <option value="C">C — Choice</option>
           </select>
         </div>
 
@@ -325,6 +327,40 @@
         ],
         propertyChecks: [
           { id: 'ihg-prop-1', label: 'Staybridge Suites or Candlewood Suites' }
+        ]
+      },
+      W: {
+        name: 'Wyndham',
+        pointName: 'Wyndham Rewards point',
+        elite: {
+          label: 'Wyndham Rewards Elite Status',
+          options: [
+            ['N', 'Member'],
+            ['G', 'Gold'],
+            ['P', 'Platinum'],
+            ['D', 'Diamond']
+          ]
+        },
+        cardOptions: [
+          ['1', 'Wyndham Rewards Earner Card (5x at Hotels by Wyndham)'],
+          ['2', 'Wyndham Rewards Earner Plus Card (6x at Hotels by Wyndham)'],
+          ['3', 'Wyndham Rewards Earner Premier Card (10x at Hotels by Wyndham)']
+        ]
+      },
+      C: {
+        name: 'Choice',
+        pointName: 'Choice Privileges point',
+        elite: {
+          label: 'Choice Privileges Elite Status',
+          options: [
+            ['N', 'Member'],
+            ['G', 'Gold'],
+            ['P', 'Platinum'],
+            ['D', 'Diamond']
+          ]
+        },
+        cardOptions: [
+          ['1', 'Choice Privileges Mastercard (up to 10x at Choice hotels)']
         ]
       }
     };
@@ -482,15 +518,15 @@
       const cardBonus = hasCreditCard === 'Y' ? getCreditCardBonus(brand, selectedCard).cardBonus : 0;
       const accrualRate = brandBase * (1 + eliteBonus) + cardBonus;
 
-      const title = `${config.name} accrual snapshot`;
+      const title = `${config.name} hotel-earn snapshot`;
       const eliteText = `${formatMultiplier(1 + eliteBonus)} elite multiplier`;
-      const cardText = hasCreditCard === 'Y' ? ` + ${cardBonus} pts/$` : ' + 0 pts/$';
+      const cardText = hasCreditCard === 'Y' ? ` + ${cardBonus} pts/$ on ${config.name.toLowerCase()} hotel spend` : ' + 0 pts/$ on hotel spend';
 
       formulaBox.style.display = 'block';
       formulaBox.innerHTML = `
         <strong>${title}</strong><br>
         Base rate: <strong>${formatMultiplier(brandBase)}</strong> × <strong>${eliteText}</strong>${cardText}<br>
-        Estimated accrual: <strong>${formatMultiplier(accrualRate)}</strong> points per $1 of qualifying spend.
+        Estimated accrual: <strong>${formatMultiplier(accrualRate)}</strong> points per $1 of qualifying ${config.name.toLowerCase()} hotel spend.
       `;
     }
 
@@ -543,13 +579,15 @@
         M: { N: 0.00, S: 0.10, G: 0.25, P: 0.50, T: 0.75, A: 0.75 },
         H: { N: 0.00, S: 0.20, G: 0.80, D: 1.00 },
         Y: { N: 0.00, D: 0.10, E: 0.20, G: 0.30 },
-        I: { N: 0.00, G: 0.10, P: 0.50, S: 1.00, A: 0.00 }
+        I: { N: 0.00, G: 0.10, P: 0.50, S: 1.00, A: 0.00 },
+        W: { N: 0.00, G: 0.10, P: 0.25, D: 0.50 },
+        C: { N: 0.00, G: 0.10, P: 0.25, D: 0.50 }
       };
       return map[brand]?.[elite] ?? 0;
     }
 
     function getBrandBase(brand, propertyChecks) {
-      let base = { M: 10, H: 10, Y: 5, I: 10 }[brand] || 10;
+      let base = { M: 10, H: 10, Y: 5, I: 10, W: 10, C: 10 }[brand] || 10;
 
       if (brand === 'M') {
         if (propertyChecks['marriott-prop-1']) base = 5;
@@ -587,6 +625,14 @@
           '1': { cardBonus: 10 },
           '2': { cardBonus: 5 },
           '3': { cardBonus: 10 }
+        },
+        W: {
+          '1': { cardBonus: 5 },
+          '2': { cardBonus: 6 },
+          '3': { cardBonus: 10 }
+        },
+        C: {
+          '1': { cardBonus: 10 }
         }
       };
 
@@ -641,7 +687,7 @@
       document.getElementById('result-a').textContent = `This award room from ${config.name} requires ${pointsRequired.toLocaleString()} ${config.pointName}s.`;
       document.getElementById('result-b').textContent = `At a cash price of $${cash.toLocaleString()}, each ${config.pointName.toLowerCase()} is worth ${cpp.toFixed(2)} cents.`;
       document.getElementById('result-c').textContent = `Accrual basis: ${formatMultiplier(brandBase)} base × ${formatMultiplier(1 + eliteBonus)} elite multiplier = ${formatMultiplier(baseMultiplier)} points per $1 on qualifying spend.`;
-      document.getElementById('result-d').textContent = `Estimated points earned on this stay: ${totalPoints.toLocaleString(undefined, { maximumFractionDigits: 2 })} total points, including ${ccBonus > 0 ? `+${ccBonus} card bonus points per $1` : 'no card bonus'} and ${propertyChecks[Object.keys(propertyChecks).find((k) => propertyChecks[k])] ? 'property-adjusted base rate' : 'standard base rate'}.`;
+      document.getElementById('result-d').textContent = `Estimated points earned on this stay: ${totalPoints.toLocaleString(undefined, { maximumFractionDigits: 2 })} total points, including ${ccBonus > 0 ? `+${ccBonus} card points per $1 at ${config.name.toLowerCase()} hotels` : 'no hotel card earning rate'} and ${propertyChecks[Object.keys(propertyChecks).find((k) => propertyChecks[k])] ? 'property-adjusted base rate' : 'standard base rate'}.`;
       results.style.display = 'block';
     });
   </script>
