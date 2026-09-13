@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Airline Miles Valuation Calculator</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.5;
+      color: #1a1a2e;
+      background: linear-gradient(135deg, #f0f4ff 0%, #e8f0fe 100%);
+      min-height: 100vh;
+      margin: 0;
+      padding: 2rem 1rem;
+    }
+
+    .container {
+      max-width: 640px;
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+      padding: 2rem;
+    }
+
+    h1 { margin: 0 0 0.25rem; font-size: 1.5rem; color: #16213e; }
+    .subtitle { color: #64748b; margin: 0 0 1.5rem; font-size: 0.95rem; }
+
+    fieldset {
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1.25rem;
+    }
+
+    legend { font-weight: 600; color: #334155; padding: 0 0.5rem; }
+    .field { margin-bottom: 1rem; }
+    .field:last-child { margin-bottom: 0; }
+
+    label {
+      display: block;
+      font-weight: 500;
+      margin-bottom: 0.35rem;
+      font-size: 0.9rem;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 0.55rem 0.75rem;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 1rem;
+      background: #fff;
+    }
+
+    input:focus, select:focus {
+      outline: 2px solid #3b82f6;
+      outline-offset: 1px;
+      border-color: #3b82f6;
+    }
+
+    .hint { font-size: 0.8rem; color: #64748b; margin-top: 0.25rem; }
+    #airline-fields { display: none; }
+
+    button {
+      width: 100%;
+      padding: 0.75rem 1.5rem;
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    button:hover { background: #1d4ed8; }
+
+    #results {
+      display: none;
+      margin-top: 1.5rem;
+      padding: 1.25rem;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 8px;
+    }
+
+    #results h2 { margin: 0 0 0.75rem; font-size: 1.1rem; color: #166534; }
+    #results p { margin: 0.5rem 0; color: #14532d; }
+
+    .error {
+      display: none;
+      margin-top: 1rem;
+      padding: 0.75rem 1rem;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      color: #991b1b;
+    }
+
+    .notice {
+      display: none;
+      margin-bottom: 1.25rem;
+      padding: 0.75rem 1rem;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      color: #1e40af;
+      font-size: 0.9rem;
+    }
+
+    .multiplier-summary {
+      display: none;
+      margin: 0 0 1.25rem;
+      padding: 1rem 1.1rem;
+      background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+      border: 1px solid #fbbf24;
+      border-radius: 8px;
+      color: #78350f;
+    }
+
+    .multiplier-summary strong {
+      display: inline-block;
+      margin-bottom: 0.25rem;
+      font-size: 0.9rem;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    .checkbox-label {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.5rem;
+      font-weight: normal;
+    }
+
+    .checkbox-label input { width: auto; margin-top: 0.2rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Airline Miles Valuation Calculator</h1>
+    <p class="subtitle">Award redemption value and elite-qualifying earnings (2026 rules)</p>
+
+    <div id="notice" class="notice"></div>
+    <div id="multiplier-summary" class="multiplier-summary" aria-live="polite"></div>
+
+    <form id="calculator-form">
+      <fieldset>
+        <legend>General Information</legend>
+
+        <div class="field">
+          <label for="airline">Airline</label>
+          <select id="airline" required>
+            <option value="">Select airline…</option>
+            <option value="AA">AA — American Airlines</option>
+            <option value="DL">DL — Delta Air Lines</option>
+            <option value="UA">UA — United Airlines</option>
+            <option value="WN">WN — Southwest Airlines</option>
+            <option value="AT">AT — Atmos Rewards (Alaska / Hawaiian)</option>
+            <option value="B6">B6 — JetBlue Airways</option>
+            <option value="AC">AC — Air Canada</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="miles-required">Points / Miles Required for Award</label>
+          <input type="number" id="miles-required" min="0" step="1" required>
+        </div>
+
+        <div class="field">
+          <label for="taxfee-a">Taxes and Fees Required for Award ($)</label>
+          <input type="number" id="taxfee-a" min="0" step="0.01" required>
+        </div>
+
+        <div class="field">
+          <label for="cash">Cash Price for the Itinerary ($)</label>
+          <input type="number" id="cash" min="0" step="0.01" required>
+        </div>
+
+        <div class="field">
+          <label for="taxfee-c">Taxes and Fees in the Cash Itinerary ($)</label>
+          <input type="number" id="taxfee-c" min="0" step="0.01" required>
+        </div>
+
+        <div class="field">
+          <label for="cashback">Credit Card Cashback (%)</label>
+          <input type="number" id="cashback" min="0" max="100" step="0.01" value="0" required>
+        </div>
+
+        <div class="field" id="distance-field">
+          <label for="distance">Flying Distance (miles)</label>
+          <input type="number" id="distance" min="0" step="1" value="0">
+          <div class="hint">Required for Atmos Rewards (distance-based earning).</div>
+        </div>
+      </fieldset>
+
+      <fieldset id="airline-fields">
+        <legend>Airline-Specific Details</legend>
+        <div id="airline-fields-content"></div>
+      </fieldset>
+
+      <button type="submit">Calculate</button>
+    </form>
+
+    <div id="error" class="error"></div>
+
+    <div id="results">
+      <h2>Results</h2>
+      <p id="result-a"></p>
+      <p id="result-b"></p>
+      <p id="result-c"></p>
+      <p id="result-d"></p>
+    </div>
+  </div>
+
+  <script>
+    const airlineFields = document.getElementById('airline-fields');
+    const airlineFieldsContent = document.getElementById('airline-fields-content');
+    const airlineSelect = document.getElementById('airline');
+    const distanceField = document.getElementById('distance-field');
+    const distanceInput = document.getElementById('distance');
+    const form = document.getElementById('calculator-form');
+    const results = document.getElementById('results');
+    const errorBox = document.getElementById('error');
+    const noticeBox = document.getElementById('notice');
+    const multiplierSummary = document.getElementById('multiplier-summary');
+
+    const AIRLINE_CONFIG = {
+      AA: {
+        notice: 'American (2026): Miles and Loyalty Points are earned on base fare + carrier fees (excl. govt taxes). Basic Economy bought after Dec 16, 2025 earns nothing.',
+        elite: {
+          label: 'AAdvantage Status',
+          options: [
+            ['N', 'Member'],
+            ['G', 'Gold'],
+            ['P', 'Platinum'],
+            ['O', 'Platinum Pro'],
+            ['E', 'Executive Platinum']
+          ]
+        },
+        fareType: {
+          label: 'Fare Type',
+          options: [
+            ['R', 'Regular economy / premium cabin'],
+            ['BE', 'Basic Economy (0 miles if bought after Dec 16, 2025)']
+          ]
+        }
+      },
+      DL: {
+        notice: 'Delta (2026): SkyMiles earned on fare spend. Status uses MQDs ($1 per qualifying dollar; Main Basic earns 0 MQDs).',
+        elite: {
+          label: 'Medallion Status',
+          options: [
+            ['N', 'Member'],
+            ['S', 'Silver'],
+            ['G', 'Gold'],
+            ['P', 'Platinum'],
+            ['D', 'Diamond']
+          ]
+        },
+        fareType: {
+          label: 'Fare Type',
+          options: [
+            ['R', 'Regular / Comfort+ / premium'],
+            ['MB', 'Main Basic (0 MQDs)']
+          ]
+        }
+      },
+      UA: {
+        notice: 'United (2026): Mile earn rates effective Apr 2, 2026. Cobrand card adds +3 miles/$ on qualifying fares. PQP = $1 per qualifying dollar spent.',
+        elite: {
+          label: 'Premier Status',
+          options: [
+            ['N', 'Member'],
+            ['S', 'Premier Silver'],
+            ['G', 'Premier Gold'],
+            ['P', 'Premier Platinum'],
+            ['K', 'Premier 1K']
+          ]
+        },
+        fareType: {
+          label: 'Fare Type',
+          options: [
+            ['R', 'Regular economy / premium cabin'],
+            ['BE', 'Basic Economy']
+          ]
+        },
+        checkboxes: [
+          { id: 'ua-cobrand', label: 'Hold eligible United cobrand credit card (+3 miles/$ on qualifying fares)', defaultChecked: false }
+        ]
+      },
+      WN: {
+        notice: 'Southwest (2026): Points and TQPs based on base fare only. Elite bonus (+25% / +100%) applies to redeemable points only, not TQPs.',
+        elite: {
+          label: 'Rapid Rewards Status',
+          options: [
+            ['N', 'Member'],
+            ['A', 'A-List'],
+            ['P', 'A-List Preferred']
+          ]
+        },
+        fareType: {
+          label: 'Fare Bundle (2026)',
+          options: [
+            ['BAS', 'Basic — 2× per $1'],
+            ['CHO', 'Choice — 6× per $1'],
+            ['CPR', 'Choice Preferred — 10× per $1'],
+            ['CEX', 'Choice Extra — 14× per $1']
+          ]
+        }
+      },
+      AT: {
+        notice: 'Atmos Rewards (2026): Distance-based earning on Alaska/Hawaiian. Choice earning (distance / spend / segments) announced but not yet live.',
+        elite: {
+          label: 'Atmos Status',
+          options: [
+            ['N', 'Member'],
+            ['S', 'Silver'],
+            ['G', 'Gold'],
+            ['P', 'Platinum'],
+            ['T', 'Titanium']
+          ]
+        },
+        fareClass: {
+          label: 'Fare Class',
+          options: [
+            ['J', 'J — First (200%)'],
+            ['C', 'C — First (175%)'],
+            ['D', 'D — First (150%)'],
+            ['I', 'I — First (150%)'],
+            ['Y', 'Y — Economy (150%)'],
+            ['B', 'B — Economy (150%)'],
+            ['H', 'H — Economy (125%)'],
+            ['K', 'K — Economy (125%)'],
+            ['M', 'M — Economy (100%)'],
+            ['L', 'L — Economy (100%)'],
+            ['V', 'V — Economy (100%)'],
+            ['S', 'S — Economy (100%)'],
+            ['N', 'N — Economy (100%)'],
+            ['Q', 'Q — Economy (100%)'],
+            ['O', 'O — Economy (100%)'],
+            ['G', 'G — Economy (100%)'],
+            ['X', 'X — Saver (30% or 0%)']
+          ]
+        },
+        checkboxes: [
+          { id: 'saver-zero', label: 'Saver (X) booked on/after Jun 11, 2026 for travel on/after Aug 1, 2026 (0 points)', defaultChecked: false, showWhen: { field: 'fare-class', value: 'X' } }
+        ]
+      },
+      B6: {
+        notice: 'JetBlue (2026): TrueBlue points from base + direct-booking + Mosaic bonuses. Status uses Tiles (1 tile per $100 qualifying spend).',
+        elite: {
+          label: 'Mosaic Status',
+          options: [
+            ['N', 'Member'],
+            ['M1', 'Mosaic 1'],
+            ['M2', 'Mosaic 2'],
+            ['M3', 'Mosaic 3'],
+            ['M4', 'Mosaic 4']
+          ]
+        },
+        fareType: {
+          label: 'Fare Type',
+          options: [
+            ['BB', 'Blue Basic'],
+            ['BL', 'Blue'],
+            ['BE', 'Blue Extra'],
+            ['MI', 'Mint']
+          ]
+        },
+        checkboxes: [
+          { id: 'b6-direct', label: 'Booked direct via jetblue.com or app (direct-booking bonus)', defaultChecked: true }
+        ]
+      },
+      AC: {
+        notice: 'Air Canada Aeroplan (2026): Spend-based points (1× base, up to 6× with status) and SQC (2× Standard, 4× Flex+, 0× Basic).',
+        elite: {
+          label: 'Aeroplan Elite Status',
+          options: [
+            ['N', 'Member'],
+            ['P', '25K'],
+            ['E3', '35K'],
+            ['E5', '50K'],
+            ['E7', '75K'],
+            ['S', 'Super Elite']
+          ]
+        },
+        fareType: {
+          label: 'Fare Bucket',
+          options: [
+            ['BAS', 'Economy Basic (0 SQC)'],
+            ['STD', 'Economy Standard (2 SQC/$)'],
+            ['FLX', 'Flex / Premium / Business (4 SQC/$)']
+          ]
+        }
+      }
+    };
+
+    const AIRLINE_META = {
+      AA: { name: 'American Airlines', currency: 'AAdvantage mile', status: 'Loyalty Point' },
+      DL: { name: 'Delta Air Lines', currency: 'SkyMile', status: 'MQD' },
+      UA: { name: 'United Airlines', currency: 'MileagePlus mile', status: 'PQP' },
+      WN: { name: 'Southwest Airlines', currency: 'Rapid Rewards point', status: 'TQP' },
+      AT: { name: 'Atmos Rewards (Alaska / Hawaiian)', currency: 'Atmos Rewards point', status: 'status point' },
+      B6: { name: 'JetBlue Airways', currency: 'TrueBlue point', status: 'Tile' },
+      AC: { name: 'Air Canada', currency: 'Aeroplan point', status: 'SQC' }
+    };
+
+    function createSelectField(id, label, hint, options) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'field';
+      const labelEl = document.createElement('label');
+      labelEl.setAttribute('for', id);
+      labelEl.textContent = label;
+      wrapper.appendChild(labelEl);
+
+      const select = document.createElement('select');
+      select.id = id;
+      select.required = true;
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = 'Select…';
+      select.appendChild(placeholder);
+      for (const [value, text] of options) {
+        const opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = text;
+        select.appendChild(opt);
+      }
+      wrapper.appendChild(select);
+      if (hint) {
+        const hintEl = document.createElement('div');
+        hintEl.className = 'hint';
+        hintEl.textContent = hint;
+        wrapper.appendChild(hintEl);
+      }
+      return wrapper;
+    }
+
+    function createCheckboxField(cfg) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'field';
+      wrapper.id = cfg.id + '-wrapper';
+      if (cfg.showWhen) wrapper.style.display = 'none';
+
+      const labelEl = document.createElement('label');
+      labelEl.className = 'checkbox-label';
+      labelEl.setAttribute('for', cfg.id);
+
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.id = cfg.id;
+      input.checked = cfg.defaultChecked || false;
+
+      const text = document.createElement('span');
+      text.textContent = cfg.label;
+      labelEl.appendChild(input);
+      labelEl.appendChild(text);
+      wrapper.appendChild(labelEl);
+
+      if (cfg.hint) {
+        const hintEl = document.createElement('div');
+        hintEl.className = 'hint';
+        hintEl.textContent = cfg.hint;
+        wrapper.appendChild(hintEl);
+      }
+      return wrapper;
+    }
+
+    function formatMultiplier(value) {
+      return Number(value).toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
+    }
+
+    function updateMultiplierSummary() {
+      const code = airlineSelect.value;
+      const elite = document.getElementById('elite')?.value || '';
+      const fareType = document.getElementById('fare-type')?.value || '';
+      const fareClass = document.getElementById('fare-class')?.value || '';
+
+      if (!code) {
+        multiplierSummary.style.display = 'none';
+        multiplierSummary.textContent = '';
+        return;
+      }
+
+      const summaryMap = {
+        AA: {
+          N: { base: '5.00x', note: 'Member' },
+          G: { base: '7.00x', note: 'Gold' },
+          P: { base: '8.00x', note: 'Platinum' },
+          O: { base: '9.00x', note: 'Platinum Pro' },
+          E: { base: '11.00x', note: 'Executive Platinum' }
+        },
+        DL: {
+          N: { base: '5.00x', note: 'Member' },
+          S: { base: '7.00x', note: 'Silver' },
+          G: { base: '8.00x', note: 'Gold' },
+          P: { base: '9.00x', note: 'Platinum' },
+          D: { base: '11.00x', note: 'Diamond' }
+        },
+        UA: {
+          N: { base: '3.00x', note: 'Member' },
+          S: { base: '5.00x', note: 'Silver' },
+          G: { base: '6.00x', note: 'Gold' },
+          P: { base: '7.00x', note: 'Platinum' },
+          K: { base: '9.00x', note: '1K' }
+        },
+        WN: {
+          N: { base: '6.00x', note: 'Member' },
+          A: { base: '7.50x', note: 'A-List' },
+          P: { base: '12.00x', note: 'A-List Preferred' }
+        },
+        AT: {
+          N: { base: '1.00x', note: 'Member' },
+          S: { base: '1.25x', note: 'Silver' },
+          G: { base: '1.50x', note: 'Gold' },
+          P: { base: '2.00x', note: 'Platinum' },
+          T: { base: '2.50x', note: 'Titanium' }
+        },
+        B6: {
+          N: { base: '6.00x', note: 'Member' },
+          M1: { base: '9.00x', note: 'Mosaic 1' },
+          M2: { base: '9.00x', note: 'Mosaic 2' },
+          M3: { base: '10.00x', note: 'Mosaic 3' },
+          M4: { base: '11.00x', note: 'Mosaic 4' }
+        },
+        AC: {
+          N: { base: '1.00x', note: 'Member' },
+          P: { base: '2.00x', note: '25K' },
+          E3: { base: '3.00x', note: '35K' },
+          E5: { base: '4.00x', note: '50K' },
+          E7: { base: '5.00x', note: '75K' },
+          S: { base: '6.00x', note: 'Super Elite' }
+        }
+      };
+
+      let text = '<strong>Accrual multiplier</strong><br>';
+
+      if (elite && summaryMap[code]?.[elite]) {
+        const eliteInfo = summaryMap[code][elite];
+        text += `Elite status: <strong>${eliteInfo.base}</strong> (${eliteInfo.note})`;
+      } else {
+        text += 'Select elite status to see the earned multiplier.';
+      }
+
+      if (fareType) {
+        const fareLabel = document.querySelector(`#fare-type option[value="${fareType}"]`)?.textContent || fareType;
+        text += '<br>Fare selection: <strong>' + fareLabel + '</strong>';
+      } else if (fareClass) {
+        const fareClassLabel = document.querySelector(`#fare-class option[value="${fareClass}"]`)?.textContent || fareClass;
+        text += '<br>Fare class: <strong>' + fareClassLabel + '</strong>';
+      } else {
+        text += '<br>Choose the fare tier to complete the accrual rate.';
+      }
+
+      multiplierSummary.innerHTML = text;
+      multiplierSummary.style.display = 'block';
+    }
+
+    function updateAirlineFields() {
+      const code = airlineSelect.value;
+      airlineFieldsContent.innerHTML = '';
+
+      if (code === 'AT') {
+        distanceField.style.display = 'block';
+        distanceInput.required = true;
+      } else {
+        distanceField.style.display = 'none';
+        distanceInput.required = false;
+      }
+
+      const config = AIRLINE_CONFIG[code];
+      if (config?.notice) {
+        noticeBox.textContent = config.notice;
+        noticeBox.style.display = 'block';
+      } else {
+        noticeBox.style.display = 'none';
+        noticeBox.textContent = '';
+      }
+
+      if (!config) {
+        airlineFields.style.display = 'none';
+        updateMultiplierSummary();
+        return;
+      }
+
+      airlineFields.style.display = 'block';
+
+      airlineFieldsContent.appendChild(
+        createSelectField('elite', config.elite.label, config.elite.hint, config.elite.options)
+      );
+
+      if (config.fareType) {
+        airlineFieldsContent.appendChild(
+          createSelectField('fare-type', config.fareType.label, config.fareType.hint, config.fareType.options)
+        );
+      }
+
+      if (config.fareClass) {
+        airlineFieldsContent.appendChild(
+          createSelectField('fare-class', config.fareClass.label, config.fareClass.hint, config.fareClass.options)
+        );
+      }
+
+      if (config.checkboxes) {
+        for (const cb of config.checkboxes) {
+          airlineFieldsContent.appendChild(createCheckboxField(cb));
+        }
+
+        for (const cb of config.checkboxes) {
+          if (cb.showWhen) {
+            const trigger = document.getElementById(cb.showWhen.field);
+            const wrapper = document.getElementById(cb.id + '-wrapper');
+            const toggle = () => {
+              wrapper.style.display = trigger.value === cb.showWhen.value ? 'block' : 'none';
+            };
+            trigger.addEventListener('change', toggle);
+            toggle();
+          }
+        }
+      }
+
+      ['elite', 'fare-type', 'fare-class'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.addEventListener('change', updateMultiplierSummary);
+        }
+      });
+
+      updateMultiplierSummary();
+    }
+
+    airlineSelect.addEventListener('change', updateAirlineFields);
+
+    function qualifyingSpend(Cash, Taxfee_c) {
+      return Math.max(0, Cash - Taxfee_c);
+    }
+
+    function calculateAA(Elite, fareType, Cash, Taxfee_c) {
+      const spend = qualifyingSpend(Cash, Taxfee_c);
+      if (fareType === 'BE') {
+        return { Miles_Accumulated: 0, EQM: 0 };
+      }
+      const rates = { N: 5, G: 7, P: 8, O: 9, E: 11 };
+      const miles = (rates[Elite] || 5) * spend;
+      return { Miles_Accumulated: miles, EQM: miles };
+    }
+
+    function calculateDL(Elite, fareType, Cash, Taxfee_c) {
+      const spend = qualifyingSpend(Cash, Taxfee_c);
+      const rates = { N: 5, S: 7, G: 8, P: 9, D: 11 };
+      const miles = (rates[Elite] || 5) * spend;
+      const mqd = fareType === 'MB' ? 0 : spend;
+      return { Miles_Accumulated: miles, EQM: mqd };
+    }
+
+    function getUAMileRate(Elite, fareType, hasCobrand) {
+      const regular = {
+        N: { noCard: 3, card: 6 },
+        S: { noCard: 5, card: 8 },
+        G: { noCard: 6, card: 9 },
+        P: { noCard: 7, card: 10 },
+        K: { noCard: 9, card: 12 }
+      };
+      const basic = {
+        N: { noCard: 0, card: 3 },
+        S: { noCard: 2, card: 5 },
+        G: { noCard: 3, card: 6 },
+        P: { noCard: 4, card: 7 },
+        K: { noCard: 6, card: 9 }
+      };
+      const table = fareType === 'BE' ? basic : regular;
+      const row = table[Elite] || table.N;
+      return hasCobrand ? row.card : row.noCard;
+    }
+
+    function calculateUA(Elite, fareType, hasCobrand, Cash, Taxfee_c) {
+      const spend = qualifyingSpend(Cash, Taxfee_c);
+      const rate = getUAMileRate(Elite, fareType, hasCobrand);
+      const miles = rate * spend;
+      const pqp = spend;
+      return { Miles_Accumulated: miles, EQM: pqp };
+    }
+
+    function calculateWN(Elite, fareType, Cash, Taxfee_c) {
+      const spend = qualifyingSpend(Cash, Taxfee_c);
+      const fareRates = { BAS: 2, CHO: 6, CPR: 10, CEX: 14 };
+      const baseRate = fareRates[fareType] || 6;
+      let eliteBonus = 0;
+      if (Elite === 'A') eliteBonus = 0.25;
+      if (Elite === 'P') eliteBonus = 1.0;
+      const points = baseRate * (1 + eliteBonus) * spend;
+      const tqp = baseRate * spend;
+      return { Miles_Accumulated: points, EQM: tqp };
+    }
+
+    function getAtmosFarePercent(fareClass) {
+      const map = {
+        J: 200, C: 175, D: 150, I: 150,
+        Y: 150, B: 150, H: 125, K: 125,
+        M: 100, L: 100, V: 100, S: 100, N: 100, Q: 100, O: 100, G: 100,
+        X: 30
+      };
+      return map[fareClass.toUpperCase()] || 100;
+    }
+
+    function getAtmosEliteBonus(Elite) {
+      return { S: 0.25, G: 0.50, P: 1.00, T: 1.50 }[Elite] || 0;
+    }
+
+    function calculateAtmos(Elite, fareClass, Distance, saverZero) {
+      const fc = fareClass.toUpperCase();
+      if (fc === 'X' && saverZero) {
+        return { Miles_Accumulated: 0, EQM: 0 };
+      }
+      const baseDist = Distance > 500 ? Distance : 500;
+      const farePct = getAtmosFarePercent(fc);
+      const eliteBonus = getAtmosEliteBonus(Elite);
+      const total = baseDist * (farePct / 100) + baseDist * eliteBonus;
+      return { Miles_Accumulated: total, EQM: total };
+    }
+
+    function calculateB6(Elite, fareType, directBooking, Cash, Taxfee_c) {
+      const spend = qualifyingSpend(Cash, Taxfee_c);
+      const base = fareType === 'BB' ? 1 : 3;
+      const directBonus = directBooking ? (fareType === 'BB' ? 1 : 3) : 0;
+      const mosaicBonus = { M1: 3, M2: 3, M3: 4, M4: 5 }[Elite] || 0;
+      const points = (base + directBonus + mosaicBonus) * spend;
+      const tiles = Math.floor(spend / 100);
+      return { Miles_Accumulated: points, EQM: tiles };
+    }
+
+    function getACPointMultiplier(Elite) {
+      return { N: 1, P: 2, E3: 3, E5: 4, E7: 5, S: 6 }[Elite] || 1;
+    }
+
+    function getACSQCRate(fareType) {
+      return { BAS: 0, STD: 2, FLX: 4 }[fareType] || 0;
+    }
+
+    function calculateAC(Elite, fareType, Cash, Taxfee_c) {
+      const spend = qualifyingSpend(Cash, Taxfee_c);
+      const points = spend * getACPointMultiplier(Elite);
+      const sqc = spend * getACSQCRate(fareType);
+      return { Miles_Accumulated: points, EQM: sqc };
+    }
+
+    function formatNum(n) {
+      return Number(n).toLocaleString(undefined, { maximumFractionDigits: 4 });
+    }
+
+    function pluralize(word, count) {
+      if (Math.abs(count - 1) < 0.0001) return word;
+      return word.endsWith('s') ? word : word + 's';
+    }
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      errorBox.style.display = 'none';
+      results.style.display = 'none';
+
+      const airline = airlineSelect.value;
+      const Miles_Required = parseFloat(document.getElementById('miles-required').value);
+      const Taxfee_a = parseFloat(document.getElementById('taxfee-a').value);
+      const Cash = parseFloat(document.getElementById('cash').value);
+      const Taxfee_c = parseFloat(document.getElementById('taxfee-c').value);
+      const Cashback = parseFloat(document.getElementById('cashback').value);
+      const Distance = parseFloat(document.getElementById('distance').value) || 0;
+
+      const Elite = document.getElementById('elite')?.value || '';
+      const fareType = document.getElementById('fare-type')?.value || '';
+      const fareClass = document.getElementById('fare-class')?.value || '';
+      const hasCobrand = document.getElementById('ua-cobrand')?.checked || false;
+      const saverZero = document.getElementById('saver-zero')?.checked || false;
+      const directBooking = document.getElementById('b6-direct')?.checked ?? true;
+
+      if (!airline) {
+        errorBox.textContent = 'Please select an airline.';
+        errorBox.style.display = 'block';
+        return;
+      }
+
+      if (airline === 'AT' && Distance <= 0) {
+        errorBox.textContent = 'Flying distance is required for Atmos Rewards.';
+        errorBox.style.display = 'block';
+        return;
+      }
+
+      let calc;
+      try {
+        switch (airline) {
+          case 'AA': calc = calculateAA(Elite, fareType, Cash, Taxfee_c); break;
+          case 'DL': calc = calculateDL(Elite, fareType, Cash, Taxfee_c); break;
+          case 'UA': calc = calculateUA(Elite, fareType, hasCobrand, Cash, Taxfee_c); break;
+          case 'WN': calc = calculateWN(Elite, fareType, Cash, Taxfee_c); break;
+          case 'AT': calc = calculateAtmos(Elite, fareClass, Distance, saverZero); break;
+          case 'B6': calc = calculateB6(Elite, fareType, directBooking, Cash, Taxfee_c); break;
+          case 'AC': calc = calculateAC(Elite, fareType, Cash, Taxfee_c); break;
+        }
+      } catch (err) {
+        errorBox.textContent = 'Calculation error: ' + err.message;
+        errorBox.style.display = 'block';
+        return;
+      }
+
+      const { Miles_Accumulated, EQM } = calc;
+      const meta = AIRLINE_META[airline];
+
+      const Total_Miles = Miles_Accumulated + Miles_Required;
+      const CPM = Total_Miles > 0 ? (Cash - Taxfee_a) * (1 - Cashback / 100) / Total_Miles * 100 : 0;
+      const CPEQM = EQM > 0 ? Cash / EQM * 100 : 0;
+
+      document.getElementById('result-a').textContent =
+        `This award ticket from ${meta.name} requires ${formatNum(Miles_Required)} ${pluralize(meta.currency, Miles_Required)}.`;
+      document.getElementById('result-b').textContent =
+        `At a cash price of $${formatNum(Cash)}, each ${meta.currency} is worth ${formatNum(CPM)} cents.`;
+      document.getElementById('result-c').textContent =
+        `The cash fare can also earn ${formatNum(Miles_Accumulated)} ${pluralize(meta.currency, Miles_Accumulated)} and ${formatNum(EQM)} ${pluralize(meta.status, EQM)} toward status.`;
+      document.getElementById('result-d').textContent =
+        `For this flight, each ${meta.status} is worth ${formatNum(CPEQM)} cents (cash price ÷ ${pluralize(meta.status, EQM)} earned).`;
+
+      results.style.display = 'block';
+    });
+  </script>
+</body>
+</html>

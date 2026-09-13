@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>eBay Resell ROI Calculator</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.5;
+      margin: 0;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #eef6ff 0%, #fef3c7 100%);
+      color: #1f2937;
+      padding: 2rem 1rem;
+    }
+
+    .container {
+      max-width: 640px;
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 8px 30px rgba(15, 23, 42, 0.08);
+      padding: 2rem;
+    }
+
+    h1 {
+      margin: 0 0 0.25rem;
+      font-size: 1.6rem;
+      color: #111827;
+    }
+
+    .subtitle {
+      margin: 0 0 1.5rem;
+      color: #6b7280;
+      font-size: 0.95rem;
+    }
+
+    .field {
+      margin-bottom: 1rem;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 0.35rem;
+      font-weight: 600;
+      color: #374151;
+      font-size: 0.92rem;
+    }
+
+    input {
+      width: 100%;
+      padding: 0.65rem 0.75rem;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 1rem;
+      background: #fff;
+    }
+
+    input:focus {
+      outline: 2px solid #3b82f6;
+      outline-offset: 1px;
+      border-color: #3b82f6;
+    }
+
+    button {
+      width: 100%;
+      padding: 0.8rem 1.25rem;
+      border: none;
+      border-radius: 8px;
+      background: #2563eb;
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s ease-in-out;
+    }
+
+    button:hover {
+      background: #1d4ed8;
+    }
+
+    #results {
+      display: none;
+      margin-top: 1.5rem;
+      padding: 1.1rem 1.25rem;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 8px;
+      color: #14532d;
+    }
+
+    #results h2 {
+      margin: 0 0 0.75rem;
+      font-size: 1.1rem;
+      color: #166534;
+    }
+
+    #results p {
+      margin: 0.5rem 0;
+    }
+
+    .error {
+      display: none;
+      margin-top: 1rem;
+      padding: 0.75rem 1rem;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      color: #991b1b;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>eBay Resell ROI Calculator</h1>
+    <p class="subtitle">Estimates the break-even resale price, final value fee, and expected profit or loss.</p>
+
+    <form id="calculator-form">
+      <div class="field">
+        <label for="name">Item name</label>
+        <input type="text" id="name" required />
+      </div>
+
+      <div class="field">
+        <label for="price">Purchase price of the item ($)</label>
+        <input type="number" id="price" min="0" step="0.01" required />
+      </div>
+
+      <div class="field">
+        <label for="purchase-sales-tax">Sales tax on purchase (%)</label>
+        <input type="number" id="purchase-sales-tax" min="0" step="0.01" required />
+      </div>
+
+      <div class="field">
+        <label for="cash-back">Cash back on purchase (%)</label>
+        <input type="number" id="cash-back" min="0" max="100" step="0.01" required />
+      </div>
+
+      <div class="field">
+        <label for="variable-fee">Variable final value fee (%)</label>
+        <input type="number" id="variable-fee" min="0" max="100" step="0.01" required />
+      </div>
+
+      <div class="field">
+        <label for="sales-sales-tax">Sales tax for the buyer (%)</label>
+        <input type="number" id="sales-sales-tax" min="0" step="0.01" required />
+      </div>
+
+      <div class="field">
+        <label for="shipping">Estimated shipping ($)</label>
+        <input type="number" id="shipping" min="0" step="0.01" required />
+      </div>
+
+      <div class="field">
+        <label for="anticipated-sale">Anticipated sale price ($)</label>
+        <input type="number" id="anticipated-sale" min="0" step="0.01" required />
+      </div>
+
+      <button type="submit">Calculate</button>
+    </form>
+
+    <div id="error" class="error"></div>
+
+    <div id="results">
+      <h2>Results</h2>
+      <p id="result-a"></p>
+      <p id="result-b"></p>
+      <p id="result-c"></p>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('calculator-form');
+    const results = document.getElementById('results');
+    const errorBox = document.getElementById('error');
+
+    function money(value) {
+      return Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      errorBox.style.display = 'none';
+      results.style.display = 'none';
+
+      const name = document.getElementById('name').value.trim();
+      const price = Number(document.getElementById('price').value);
+      const purchaseSalesTax = Number(document.getElementById('purchase-sales-tax').value);
+      const cashBack = Number(document.getElementById('cash-back').value);
+      const variableFee = Number(document.getElementById('variable-fee').value);
+      const salesSalesTax = Number(document.getElementById('sales-sales-tax').value);
+      const shipping = Number(document.getElementById('shipping').value);
+      const anticipatedSale = Number(document.getElementById('anticipated-sale').value);
+
+      const denominator = 1 - (1 + salesSalesTax / 100) * (variableFee / 100);
+      if (denominator <= 0) {
+        errorBox.textContent = 'The break-even formula is invalid because the fee/tax combination is too high or the denominator is non-positive.';
+        errorBox.style.display = 'block';
+        return;
+      }
+
+      const cost = price * (1 + purchaseSalesTax / 100) * (1 - cashBack / 100);
+      const sale = (cost + shipping + 0.3) / denominator;
+      const finalValueFee = 0.3 + sale * (1 + salesSalesTax / 100) * (variableFee / 100);
+      const profit = anticipatedSale - 0.3 - anticipatedSale * (1 + salesSalesTax / 100) * (variableFee / 100) - shipping - cost;
+
+      document.getElementById('result-a').textContent = `${name ? name : 'Item'}: The breakeven sale price is $${money(sale)}.`;
+      document.getElementById('result-b').textContent = `The final value fee is $${money(finalValueFee)}.`;
+      document.getElementById('result-c').textContent = `The profit/loss is $${money(profit)}.`;
+
+      results.style.display = 'block';
+    });
+  </script>
+</body>
+</html>

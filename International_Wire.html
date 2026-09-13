@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>International Wire Transfer Fee Calculator</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.5;
+      margin: 0;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #eff6ff 0%, #fefce8 100%);
+      color: #1f2937;
+      padding: 2rem 1rem;
+    }
+
+    .container {
+      max-width: 860px;
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 12px 36px rgba(15, 23, 42, 0.08);
+      padding: 2rem;
+    }
+
+    h1 {
+      margin: 0 0 0.25rem;
+      font-size: 1.7rem;
+      color: #111827;
+    }
+
+    .subtitle {
+      margin: 0 0 1.5rem;
+      color: #6b7280;
+      font-size: 0.95rem;
+    }
+
+    .formula-box {
+      margin: 0 0 1.5rem;
+      padding: 1rem 1.1rem;
+      background: linear-gradient(135deg, #eef2ff 0%, #f5f3ff 100%);
+      border: 1px solid #c7d2fe;
+      border-radius: 10px;
+      color: #312e81;
+    }
+
+    .formula-box strong {
+      display: inline-block;
+      margin-bottom: 0.35rem;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .formula-box p {
+      margin: 0.3rem 0;
+      font-size: 0.95rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .field {
+      margin-bottom: 0.2rem;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 0.35rem;
+      font-weight: 600;
+      color: #374151;
+      font-size: 0.92rem;
+    }
+
+    input {
+      width: 100%;
+      padding: 0.65rem 0.75rem;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 1rem;
+      background: #fff;
+    }
+
+    input:focus {
+      outline: 2px solid #3b82f6;
+      outline-offset: 1px;
+      border-color: #3b82f6;
+    }
+
+    button {
+      width: 100%;
+      padding: 0.8rem 1.25rem;
+      border: none;
+      border-radius: 8px;
+      background: #2563eb;
+      color: white;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s ease-in-out;
+    }
+
+    button:hover {
+      background: #1d4ed8;
+    }
+
+    .error {
+      display: none;
+      margin-top: 1rem;
+      padding: 0.8rem 1rem;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      color: #991b1b;
+    }
+
+    #results {
+      display: none;
+      margin-top: 1.5rem;
+      padding: 1.1rem 1.25rem;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 8px;
+      color: #14532d;
+    }
+
+    #results h2 {
+      margin: 0 0 0.75rem;
+      font-size: 1.1rem;
+      color: #166534;
+    }
+
+    #results p {
+      margin: 0.5rem 0;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      margin-top: 1rem;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      font-size: 0.88rem;
+    }
+
+    th, td {
+      border: 1px solid #e5e7eb;
+      padding: 0.45rem 0.55rem;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    th {
+      background: #f8fafc;
+      color: #374151;
+    }
+
+    .rate-header {
+      text-align: center;
+      font-weight: 700;
+    }
+
+    .amount-label {
+      text-align: left;
+      width: 110px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>International Wire Transfer Fee Calculator</h1>
+    <p class="subtitle">Calculates service fees, USD transfer fees, and fee rates across a range of transfer amounts and exchange rates.</p>
+
+    <div class="formula-box">
+      <strong>Formula</strong>
+      <p>Service fee (CNY) = min(amount × exchange rate × 0.001, 250) + 80</p>
+      <p>Transfer fee (USD) = service fee / exchange rate + 16 + 18</p>
+      <p>Fee rate (per $1,000) = transfer fee / amount × 1000</p>
+    </div>
+
+    <form id="wire-form">
+      <div class="grid">
+        <div class="field">
+          <label for="amount-start">Amount start (USD)</label>
+          <input id="amount-start" type="number" min="0" step="0.01" value="10000" required />
+        </div>
+
+        <div class="field">
+          <label for="amount-end">Amount end (USD)</label>
+          <input id="amount-end" type="number" min="0" step="0.01" value="50000" required />
+        </div>
+
+        <div class="field">
+          <label for="amount-points">Amount points</label>
+          <input id="amount-points" type="number" min="2" step="1" value="81" required />
+        </div>
+
+        <div class="field">
+          <label for="rate-start">Exchange rate start (USD to CNY)</label>
+          <input id="rate-start" type="number" min="0" step="0.0001" value="7" required />
+        </div>
+
+        <div class="field">
+          <label for="rate-end">Exchange rate end (USD to CNY)</label>
+          <input id="rate-end" type="number" min="0" step="0.0001" value="7.5" required />
+        </div>
+
+        <div class="field">
+          <label for="rate-points">Exchange rate points</label>
+          <input id="rate-points" type="number" min="2" step="1" value="101" required />
+        </div>
+
+        <div class="field">
+          <label for="fee-rate">Service fee rate (per $1,000)</label>
+          <input id="fee-rate" type="number" min="0" step="0.0001" value="0.001" required />
+        </div>
+
+        <div class="field">
+          <label for="max-fee">Maximum service fee (CNY)</label>
+          <input id="max-fee" type="number" min="0" step="0.01" value="250" required />
+        </div>
+
+        <div class="field">
+          <label for="tele-fee">Telegraph fee (CNY)</label>
+          <input id="tele-fee" type="number" min="0" step="0.01" value="80" required />
+        </div>
+
+        <div class="field">
+          <label for="income-fee">Incoming wire fee (USD)</label>
+          <input id="income-fee" type="number" min="0" step="0.01" value="16" required />
+        </div>
+
+        <div class="field">
+          <label for="interchange-fee">Interchange bank fee (USD)</label>
+          <input id="interchange-fee" type="number" min="0" step="0.01" value="18" required />
+        </div>
+      </div>
+
+      <button type="submit">Calculate fee grid</button>
+    </form>
+
+    <div id="error" class="error"></div>
+
+    <div id="results">
+      <h2>Results</h2>
+      <p id="summary-a"></p>
+      <p id="summary-b"></p>
+      <p id="summary-c"></p>
+      <div class="table-wrap">
+        <table id="preview-table"></table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('wire-form');
+    const results = document.getElementById('results');
+    const errorBox = document.getElementById('error');
+
+    function money(value) {
+      return Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function buildRange(start, end, points) {
+      if (points <= 1) return [Number(start)];
+      const step = (Number(end) - Number(start)) / (points - 1);
+      return Array.from({ length: points }, (_, idx) => Number(start) + step * idx);
+    }
+
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      errorBox.style.display = 'none';
+      results.style.display = 'none';
+
+      const amountStart = Number(document.getElementById('amount-start').value);
+      const amountEnd = Number(document.getElementById('amount-end').value);
+      const amountPoints = Number(document.getElementById('amount-points').value);
+      const rateStart = Number(document.getElementById('rate-start').value);
+      const rateEnd = Number(document.getElementById('rate-end').value);
+      const ratePoints = Number(document.getElementById('rate-points').value);
+      const feeRate = Number(document.getElementById('fee-rate').value);
+      const maxFee = Number(document.getElementById('max-fee').value);
+      const teleFee = Number(document.getElementById('tele-fee').value);
+      const incomeFee = Number(document.getElementById('income-fee').value);
+      const interchangeFee = Number(document.getElementById('interchange-fee').value);
+
+      if ([amountStart, amountEnd, rateStart, rateEnd, feeRate, maxFee, teleFee, incomeFee, interchangeFee].some(Number.isNaN)) {
+        errorBox.textContent = 'Please enter valid numbers for all fields.';
+        errorBox.style.display = 'block';
+        return;
+      }
+
+      if (amountPoints < 2 || ratePoints < 2 || amountStart < 0 || amountEnd < 0 || rateStart <= 0 || rateEnd <= 0) {
+        errorBox.textContent = 'Points must be at least 2, amount values must be non-negative, and exchange rates must be positive.';
+        errorBox.style.display = 'block';
+        return;
+      }
+
+      const amounts = buildRange(amountStart, amountEnd, amountPoints);
+      const rates = buildRange(rateStart, rateEnd, ratePoints);
+      const serviceFees = Array.from({ length: amounts.length }, () => Array(rates.length).fill(0));
+      const totalFees = Array.from({ length: amounts.length }, () => Array(rates.length).fill(0));
+      const feeRates = Array.from({ length: amounts.length }, () => Array(rates.length).fill(0));
+
+      let minFee = Infinity;
+      let maxFeeValue = -Infinity;
+      let minFeeRate = Infinity;
+      let maxFeeRate = -Infinity;
+
+      for (let i = 0; i < amounts.length; i++) {
+        for (let j = 0; j < rates.length; j++) {
+          const amount = amounts[i];
+          const rate = rates[j];
+          let serviceFee = amount * rate * feeRate;
+          if (serviceFee > maxFee) {
+            serviceFee = maxFee;
+          }
+          serviceFee += teleFee;
+
+          const totalFee = serviceFee / rate + incomeFee + interchangeFee;
+          const ratePer1000 = (totalFee / amount) * 1000;
+
+          serviceFees[i][j] = serviceFee;
+          totalFees[i][j] = totalFee;
+          feeRates[i][j] = ratePer1000;
+
+          minFee = Math.min(minFee, totalFee);
+          maxFeeValue = Math.max(maxFeeValue, totalFee);
+          minFeeRate = Math.min(minFeeRate, ratePer1000);
+          maxFeeRate = Math.max(maxFeeRate, ratePer1000);
+        }
+      }
+
+      const previewRows = 6;
+      const previewCols = 6;
+      const table = document.getElementById('preview-table');
+      table.innerHTML = '';
+
+      const headerRow = document.createElement('tr');
+      headerRow.innerHTML = '<th class="amount-label">Amount ↓ / Rate →</th>';
+      for (let j = 0; j < previewCols; j++) {
+        const rate = rates[Math.floor((j / (previewCols - 1)) * (rates.length - 1))];
+        const th = document.createElement('th');
+        th.className = 'rate-header';
+        th.textContent = `${money(rate)}`;
+        headerRow.appendChild(th);
+      }
+      table.appendChild(headerRow);
+
+      for (let i = 0; i < previewRows; i++) {
+        const amount = amounts[Math.floor((i / (previewRows - 1)) * (amounts.length - 1))];
+        const row = document.createElement('tr');
+
+        const labelCell = document.createElement('th');
+        labelCell.className = 'amount-label';
+        labelCell.textContent = `$${money(amount)}`;
+        row.appendChild(labelCell);
+
+        for (let j = 0; j < previewCols; j++) {
+          const rate = rates[Math.floor((j / (previewCols - 1)) * (rates.length - 1))];
+          const value = totalFees[Math.floor((i / (previewRows - 1)) * (amounts.length - 1))][Math.floor((j / (previewCols - 1)) * (rates.length - 1))];
+          const td = document.createElement('td');
+          td.textContent = `$${money(value)}`;
+          row.appendChild(td);
+        }
+        table.appendChild(row);
+      }
+
+      const firstAmount = amounts[0];
+      const firstRate = rates[0];
+      const midAmount = amounts[Math.floor(amounts.length / 2)];
+      const midRate = rates[Math.floor(rates.length / 2)];
+
+      document.getElementById('summary-a').textContent = `Range: ${money(amountStart)} to ${money(amountEnd)} USD and ${money(rateStart)} to ${money(rateEnd)} CNY per USD.`;
+      document.getElementById('summary-b').textContent = `Low-end example: at $${money(firstAmount)} and ${money(firstRate)} CNY/USD, the total fee is $${money(totalFees[0][0])}, and the fee rate is ${money(feeRates[0][0])} per $1,000.`;
+      document.getElementById('summary-c').textContent = `Mid-range example: at $${money(midAmount)} and ${money(midRate)} CNY/USD, the total fee is $${money(totalFees[Math.floor(amounts.length / 2)][Math.floor(rates.length / 2)] )}, with a fee range from $${money(minFee)} to $${money(maxFeeValue)} across the full grid.`;
+
+      results.style.display = 'block';
+    });
+  </script>
+</body>
+</html>

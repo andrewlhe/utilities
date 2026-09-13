@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hotel Points Valuation Calculator</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.5;
+      color: #1f2937;
+      background: linear-gradient(135deg, #fef3c7 0%, #ecfeff 100%);
+      margin: 0;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    .container {
+      max-width: 700px;
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 8px 30px rgba(15, 23, 42, 0.08);
+      padding: 2rem;
+    }
+
+    h1 {
+      margin: 0 0 0.25rem;
+      font-size: 1.7rem;
+      color: #111827;
+    }
+
+    .subtitle {
+      color: #6b7280;
+      margin: 0 0 1.5rem;
+      font-size: 0.95rem;
+    }
+
+    fieldset {
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 1rem 1.1rem;
+      margin-bottom: 1.25rem;
+    }
+
+    legend {
+      font-weight: 700;
+      color: #374151;
+      padding: 0 0.5rem;
+    }
+
+    .field {
+      margin-bottom: 1rem;
+    }
+
+    .field:last-child {
+      margin-bottom: 0;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 0.35rem;
+      font-weight: 600;
+      color: #374151;
+      font-size: 0.92rem;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 0.62rem 0.75rem;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 1rem;
+      background: #fff;
+    }
+
+    input:focus, select:focus {
+      outline: 2px solid #3b82f6;
+      outline-offset: 1px;
+      border-color: #3b82f6;
+    }
+
+    .hint {
+      font-size: 0.8rem;
+      color: #64748b;
+      margin-top: 0.25rem;
+    }
+
+    button {
+      width: 100%;
+      padding: 0.8rem 1.25rem;
+      border: none;
+      border-radius: 8px;
+      background: #0f766e;
+      color: white;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s ease-in-out;
+    }
+
+    button:hover {
+      background: #115e59;
+    }
+
+    #results {
+      display: none;
+      margin-top: 1.5rem;
+      padding: 1.1rem 1.25rem;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 8px;
+      color: #14532d;
+    }
+
+    #results h2 {
+      margin: 0 0 0.75rem;
+      font-size: 1.1rem;
+      color: #166534;
+    }
+
+    #results p {
+      margin: 0.5rem 0;
+    }
+
+    .error {
+      display: none;
+      margin-top: 1rem;
+      padding: 0.8rem 1rem;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      color: #991b1b;
+    }
+
+    .checkbox-label {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.5rem;
+      font-weight: 500;
+      color: #374151;
+    }
+
+    .checkbox-label input {
+      width: auto;
+      margin-top: 0.2rem;
+    }
+
+    .formula-box {
+      margin: 0 0 1.25rem;
+      padding: 1rem 1.1rem;
+      background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+      border: 1px solid #fbbf24;
+      border-radius: 8px;
+      color: #7c2d12;
+    }
+
+    .formula-box strong {
+      display: inline-block;
+      margin-bottom: 0.3rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 0.8rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Hotel Points Valuation Calculator</h1>
+    <p class="subtitle">Estimate the value of a hotel award stay based on brand, elite status, and credit-card bonuses.</p>
+
+    <div id="formula-box" class="formula-box" aria-live="polite"></div>
+
+    <form id="hotel-form">
+      <fieldset>
+        <legend>General Information</legend>
+
+        <div class="field">
+          <label for="brand">Hotel Brand</label>
+          <select id="brand" required>
+            <option value="">Select brand…</option>
+            <option value="M">M — Marriott</option>
+            <option value="H">H — Hilton</option>
+            <option value="Y">Y — Hyatt</option>
+            <option value="I">I — IHG</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="points-required">Points Required for Award Night</label>
+          <input type="number" id="points-required" min="0" step="1" required />
+        </div>
+
+        <div class="field">
+          <label for="taxfee-award">Taxes and Fees Required for Award Night ($)</label>
+          <input type="number" id="taxfee-award" min="0" step="0.01" required />
+        </div>
+
+        <div class="field">
+          <label for="cash">Room Rate in Cash ($)</label>
+          <input type="number" id="cash" min="0" step="0.01" required />
+        </div>
+
+        <div class="field">
+          <label for="taxfee-cash">Taxes and Fees in the Cash Rate ($)</label>
+          <input type="number" id="taxfee-cash" min="0" step="0.01" required />
+        </div>
+      </fieldset>
+
+      <fieldset id="brand-fields">
+        <legend>Brand-Specific Details</legend>
+        <div id="brand-fields-content"></div>
+      </fieldset>
+
+      <button type="submit">Calculate</button>
+    </form>
+
+    <div id="error" class="error"></div>
+
+    <div id="results">
+      <h2>Results</h2>
+      <p id="result-a"></p>
+      <p id="result-b"></p>
+      <p id="result-c"></p>
+      <p id="result-d"></p>
+    </div>
+  </div>
+
+  <script>
+    const brandSelect = document.getElementById('brand');
+    const brandFields = document.getElementById('brand-fields');
+    const brandFieldsContent = document.getElementById('brand-fields-content');
+    const form = document.getElementById('hotel-form');
+    const results = document.getElementById('results');
+    const errorBox = document.getElementById('error');
+    const formulaBox = document.getElementById('formula-box');
+
+    const BRAND_CONFIG = {
+      M: {
+        name: 'Marriott',
+        pointName: 'Marriott Bonvoy Point',
+        elite: {
+          label: 'Marriott Elite Status',
+          options: [
+            ['N', 'General Member'],
+            ['S', 'Silver'],
+            ['G', 'Gold'],
+            ['P', 'Platinum'],
+            ['T', 'Titanium'],
+            ['A', 'Ambassador']
+          ]
+        },
+        cardOptions: [
+          ['1', 'Chase Marriott Bonvoy Boundless / Premier Plus'],
+          ['2', 'Chase Marriott Bonvoy Bold'],
+          ['3', 'Chase Marriott Bonvoy Bountiful'],
+          ['4', 'AmEx Marriott Bonvoy Brilliant / SPG Luxury'],
+          ['5', 'AmEx Marriott Bonvoy Bevy'],
+          ['6', 'AmEx Marriott Bonvoy Business / SPG Business'],
+          ['7', 'AmEx Marriott Bonvoy (legacy SPG)']
+        ],
+        propertyChecks: [
+          { id: 'marriott-prop-1', label: 'Residence Inn, TownePlace Suites, or Element' },
+          { id: 'marriott-prop-2', label: 'Marriott Executive Apartments or ExecuStay' }
+        ]
+      },
+      H: {
+        name: 'Hilton',
+        pointName: 'Hilton point',
+        elite: {
+          label: 'Hilton Elite Status',
+          options: [
+            ['N', 'Member'],
+            ['S', 'Silver'],
+            ['G', 'Gold'],
+            ['D', 'Diamond']
+          ]
+        },
+        cardOptions: [
+          ['1', 'AmEx Hilton'],
+          ['2', 'AmEx Hilton Surpass'],
+          ['3', 'AmEx Hilton Business'],
+          ['4', 'AmEx Hilton Aspire']
+        ],
+        propertyChecks: [
+          { id: 'hilton-prop-1', label: 'Home2 Suites by Hilton or Tru by Hilton' }
+        ]
+      },
+      Y: {
+        name: 'Hyatt',
+        pointName: 'World of Hyatt point',
+        elite: {
+          label: 'Hyatt Elite Status',
+          options: [
+            ['N', 'General Member'],
+            ['D', 'Discoverist'],
+            ['E', 'Explorist'],
+            ['G', 'Globalist']
+          ]
+        },
+        cardOptions: [
+          ['1', 'Chase World of Hyatt'],
+          ['2', 'Chase World of Hyatt Business']
+        ]
+      },
+      I: {
+        name: 'IHG',
+        pointName: 'IHG point',
+        elite: {
+          label: 'IHG Elite Status',
+          options: [
+            ['N', 'Club Member'],
+            ['G', 'Gold'],
+            ['P', 'Platinum'],
+            ['S', 'Spire'],
+            ['A', 'Ambassador (paid status; no standard accrual bonus)']
+          ]
+        },
+        cardOptions: [
+          ['1', 'Chase IHG Premier'],
+          ['2', 'Chase IHG Traveler'],
+          ['3', 'Chase IHG Premier Business']
+        ],
+        propertyChecks: [
+          { id: 'ihg-prop-1', label: 'Staybridge Suites or Candlewood Suites' }
+        ]
+      }
+    };
+
+    function createSelectField(id, labelText, options, hintText = '') {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'field';
+
+      const label = document.createElement('label');
+      label.setAttribute('for', id);
+      label.textContent = labelText;
+      wrapper.appendChild(label);
+
+      const select = document.createElement('select');
+      select.id = id;
+      select.required = true;
+
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = 'Select…';
+      select.appendChild(placeholder);
+
+      options.forEach(([value, text]) => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = text;
+        select.appendChild(option);
+      });
+
+      wrapper.appendChild(select);
+
+      if (hintText) {
+        const hint = document.createElement('div');
+        hint.className = 'hint';
+        hint.textContent = hintText;
+        wrapper.appendChild(hint);
+      }
+
+      return wrapper;
+    }
+
+    function createCheckboxField(id, labelText) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'field';
+
+      const label = document.createElement('label');
+      label.className = 'checkbox-label';
+      label.setAttribute('for', id);
+
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.id = id;
+
+      const text = document.createElement('span');
+      text.textContent = labelText;
+
+      label.appendChild(input);
+      label.appendChild(text);
+      wrapper.appendChild(label);
+      return wrapper;
+    }
+
+    function createCreditCardField(config) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'field';
+
+      const label = document.createElement('label');
+      label.setAttribute('for', 'has-credit-card');
+      label.textContent = 'Do you hold a credit card for this brand?';
+      wrapper.appendChild(label);
+
+      const select = document.createElement('select');
+      select.id = 'has-credit-card';
+      select.required = true;
+      const noCard = document.createElement('option');
+      noCard.value = '';
+      noCard.textContent = 'Select…';
+      const yes = document.createElement('option');
+      yes.value = 'Y';
+      yes.textContent = 'Yes';
+      const no = document.createElement('option');
+      no.value = 'N';
+      no.textContent = 'No';
+      select.appendChild(noCard);
+      select.appendChild(yes);
+      select.appendChild(no);
+      wrapper.appendChild(select);
+
+      const cashbackField = document.createElement('div');
+      cashbackField.className = 'field';
+      cashbackField.id = 'cashback-field';
+      cashbackField.style.display = 'none';
+
+      const cashbackLabel = document.createElement('label');
+      cashbackLabel.setAttribute('for', 'cashback');
+      cashbackLabel.textContent = 'Credit Card Cashback (%)';
+      cashbackField.appendChild(cashbackLabel);
+
+      const cashbackInput = document.createElement('input');
+      cashbackInput.type = 'number';
+      cashbackInput.id = 'cashback';
+      cashbackInput.min = '0';
+      cashbackInput.max = '100';
+      cashbackInput.step = '0.01';
+      cashbackInput.value = '0';
+      cashbackField.appendChild(cashbackInput);
+
+      const cardField = document.createElement('div');
+      cardField.className = 'field';
+      cardField.id = 'cc-field';
+      cardField.style.display = 'none';
+      const cardSelect = createSelectField('credit-card', 'Select Credit Card', config.cardOptions);
+      cardField.appendChild(cardSelect);
+
+      const toggleCardFields = () => {
+        const value = select.value;
+        cashbackField.style.display = value === 'N' ? 'block' : 'none';
+        cardField.style.display = value === 'Y' ? 'block' : 'none';
+      };
+      select.addEventListener('change', toggleCardFields);
+
+      wrapper.appendChild(cashbackField);
+      wrapper.appendChild(cardField);
+      return wrapper;
+    }
+
+    function formatMultiplier(value) {
+      return Number(value).toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1') + 'x';
+    }
+
+    function getCurrentPropertyChecks() {
+      return {
+        'marriott-prop-1': document.getElementById('marriott-prop-1')?.checked || false,
+        'marriott-prop-2': document.getElementById('marriott-prop-2')?.checked || false,
+        'hilton-prop-1': document.getElementById('hilton-prop-1')?.checked || false,
+        'ihg-prop-1': document.getElementById('ihg-prop-1')?.checked || false
+      };
+    }
+
+    function updateFormulaBox() {
+      const brand = brandSelect.value;
+      if (!brand) {
+        formulaBox.style.display = 'none';
+        formulaBox.innerHTML = '';
+        return;
+      }
+
+      const config = BRAND_CONFIG[brand];
+      const elite = document.getElementById('elite')?.value || 'N';
+      const hasCreditCard = document.getElementById('has-credit-card')?.value || 'N';
+      const selectedCard = document.getElementById('credit-card')?.value || '';
+      const propertyChecks = getCurrentPropertyChecks();
+      const brandBase = getBrandBase(brand, propertyChecks);
+      const eliteBonus = getEliteBonus(brand, elite);
+      const cardBonus = hasCreditCard === 'Y' ? getCreditCardBonus(brand, selectedCard).cardBonus : 0;
+      const accrualRate = brandBase * (1 + eliteBonus) + cardBonus;
+
+      const title = `${config.name} accrual snapshot`;
+      const eliteText = `${formatMultiplier(1 + eliteBonus)} elite multiplier`;
+      const cardText = hasCreditCard === 'Y' ? ` + ${cardBonus} pts/$` : ' + 0 pts/$';
+
+      formulaBox.style.display = 'block';
+      formulaBox.innerHTML = `
+        <strong>${title}</strong><br>
+        Base rate: <strong>${formatMultiplier(brandBase)}</strong> × <strong>${eliteText}</strong>${cardText}<br>
+        Estimated accrual: <strong>${formatMultiplier(accrualRate)}</strong> points per $1 of qualifying spend.
+      `;
+    }
+
+    function updateBrandFields() {
+      const brand = brandSelect.value;
+      brandFieldsContent.innerHTML = '';
+      formulaBox.innerHTML = '';
+      formulaBox.style.display = 'none';
+
+      if (!brand) {
+        brandFields.style.display = 'none';
+        return;
+      }
+
+      const config = BRAND_CONFIG[brand];
+      brandFields.style.display = 'block';
+
+      brandFieldsContent.appendChild(createCreditCardField(config));
+      brandFieldsContent.appendChild(createSelectField('elite', config.elite.label, config.elite.options));
+
+      if (config.propertyChecks) {
+        config.propertyChecks.forEach(({ id, label }) => {
+          brandFieldsContent.appendChild(createCheckboxField(id, label));
+        });
+      }
+
+      const info = document.createElement('div');
+      info.className = 'hint';
+      info.textContent = 'Formula: Total Points = Brand Base × (1 + Elite Bonus) × (Cash − Taxes in Cash) + Card Bonus × Cash';
+      brandFieldsContent.appendChild(info);
+
+      ['has-credit-card', 'credit-card', 'elite'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.addEventListener('change', updateFormulaBox);
+        }
+      });
+
+      document.querySelectorAll('input[type="checkbox"]').forEach((el) => {
+        el.addEventListener('change', updateFormulaBox);
+      });
+
+      updateFormulaBox();
+    }
+
+    brandSelect.addEventListener('change', updateBrandFields);
+
+    function getEliteBonus(brand, elite) {
+      const map = {
+        M: { N: 0.00, S: 0.10, G: 0.25, P: 0.50, T: 0.75, A: 0.75 },
+        H: { N: 0.00, S: 0.20, G: 0.80, D: 1.00 },
+        Y: { N: 0.00, D: 0.10, E: 0.20, G: 0.30 },
+        I: { N: 0.00, G: 0.10, P: 0.50, S: 1.00, A: 0.00 }
+      };
+      return map[brand]?.[elite] ?? 0;
+    }
+
+    function getBrandBase(brand, propertyChecks) {
+      let base = { M: 10, H: 10, Y: 5, I: 10 }[brand] || 10;
+
+      if (brand === 'M') {
+        if (propertyChecks['marriott-prop-1']) base = 5;
+        if (propertyChecks['marriott-prop-2']) base = 2.5;
+      }
+
+      if (brand === 'H' && propertyChecks['hilton-prop-1']) base = 5;
+      if (brand === 'I' && propertyChecks['ihg-prop-1']) base = 5;
+
+      return base;
+    }
+
+    function getCreditCardBonus(brand, selectedCard) {
+      const map = {
+        M: {
+          '1': { cardBonus: 6 },
+          '2': { cardBonus: 3 },
+          '3': { cardBonus: 6 },
+          '4': { cardBonus: 6 },
+          '5': { cardBonus: 6 },
+          '6': { cardBonus: 6 },
+          '7': { cardBonus: 2 }
+        },
+        H: {
+          '1': { cardBonus: 7 },
+          '2': { cardBonus: 12 },
+          '3': { cardBonus: 12 },
+          '4': { cardBonus: 14 }
+        },
+        Y: {
+          '1': { cardBonus: 4 },
+          '2': { cardBonus: 4 }
+        },
+        I: {
+          '1': { cardBonus: 10 },
+          '2': { cardBonus: 5 },
+          '3': { cardBonus: 10 }
+        }
+      };
+
+      const entry = map[brand]?.[selectedCard];
+      return entry || { cardBonus: 0 };
+    }
+
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      errorBox.style.display = 'none';
+      results.style.display = 'none';
+
+      const brand = brandSelect.value;
+      if (!brand) {
+        errorBox.textContent = 'Please select a hotel brand.';
+        errorBox.style.display = 'block';
+        return;
+      }
+
+      const pointsRequired = Number(document.getElementById('points-required').value);
+      const taxfeeAward = Number(document.getElementById('taxfee-award').value);
+      const cash = Number(document.getElementById('cash').value);
+      const taxfeeCash = Number(document.getElementById('taxfee-cash').value);
+      const elite = document.getElementById('elite')?.value || '';
+      const hasCreditCard = document.getElementById('has-credit-card')?.value || '';
+      const cashback = Number(document.getElementById('cashback')?.value || 0) / 100;
+      const selectedCard = document.getElementById('credit-card')?.value || '';
+
+      const propertyChecks = getCurrentPropertyChecks();
+
+      if (!elite) {
+        errorBox.textContent = 'Please choose an elite status.';
+        errorBox.style.display = 'block';
+        return;
+      }
+
+      if (!hasCreditCard) {
+        errorBox.textContent = 'Please tell us whether you hold a matching credit card.';
+        errorBox.style.display = 'block';
+        return;
+      }
+
+      const cardData = hasCreditCard === 'Y' ? getCreditCardBonus(brand, selectedCard) : { cardBonus: 0 };
+      const eliteBonus = getEliteBonus(brand, elite);
+      const brandBase = getBrandBase(brand, propertyChecks);
+      const ccBonus = hasCreditCard === 'Y' ? cardData.cardBonus : 0;
+      const totalPoints = brandBase * (1 + eliteBonus) * (cash - taxfeeCash) + ccBonus * cash;
+      const cpp = ((cash - taxfeeAward) * (1 - cashback)) / (pointsRequired + totalPoints) * 100;
+      const baseMultiplier = brandBase * (1 + eliteBonus);
+      const config = BRAND_CONFIG[brand];
+
+      document.getElementById('result-a').textContent = `This award room from ${config.name} requires ${pointsRequired.toLocaleString()} ${config.pointName}s.`;
+      document.getElementById('result-b').textContent = `At a cash price of $${cash.toLocaleString()}, each ${config.pointName.toLowerCase()} is worth ${cpp.toFixed(2)} cents.`;
+      document.getElementById('result-c').textContent = `Accrual basis: ${formatMultiplier(brandBase)} base × ${formatMultiplier(1 + eliteBonus)} elite multiplier = ${formatMultiplier(baseMultiplier)} points per $1 on qualifying spend.`;
+      document.getElementById('result-d').textContent = `Estimated points earned on this stay: ${totalPoints.toLocaleString(undefined, { maximumFractionDigits: 2 })} total points, including ${ccBonus > 0 ? `+${ccBonus} card bonus points per $1` : 'no card bonus'} and ${propertyChecks[Object.keys(propertyChecks).find((k) => propertyChecks[k])] ? 'property-adjusted base rate' : 'standard base rate'}.`;
+      results.style.display = 'block';
+    });
+  </script>
+</body>
+</html>
