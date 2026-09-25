@@ -1,7 +1,7 @@
 # Standalone Programs
 
-Each script under `apps/` is a self-contained utility split from the original
-Transaction Utility JAR.
+Each script under `apps/` is a self-contained utility with both a GUI and a
+CLI.
 
 **Default behavior:** run without arguments → opens the GUI.
 To use the CLI, pass the required arguments on the command line.
@@ -10,11 +10,14 @@ To use the CLI, pass the required arguments on the command line.
 
 ## duplicates.py
 
-Find and delete duplicate files by MD5 hash.
+Find duplicate files by MD5, grouped by content; pick which copies to delete.
+
+Features: scan history (switch between past scans), per-file checkboxes,
+progress bar, Keep First shortcut.
 
 ```bash
 python apps/duplicates.py                          # GUI
-python apps/duplicates.py /path/to/scan --remove   # CLI
+python apps/duplicates.py /path/to/scan --remove   # CLI (keeps first copy)
 ```
 
 ---
@@ -52,66 +55,14 @@ python apps/append_head.py /photos  # CLI
 
 ---
 
-## gpx.py
+## epub2pdf_tool.py
 
-Convert an Apple plist track dump to GPX.
+Convert EPUB files to PDF using Calibre's `ebook-convert` engine.
 
-```bash
-python apps/gpx.py                                    # GUI
-python apps/gpx.py --input data.plist --output data.gpx   # CLI
-```
-
----
-
-## photos_gallery.py
-
-Copy photos listed in a CSV/XLSX into date-named folders.
+Requires [Calibre](https://calibre-ebook.com/download) (auto-detected).
+See `README-epub2pdf.md` for details.
 
 ```bash
-python apps/photos_gallery.py                                              # GUI
-python apps/photos_gallery.py --csv gallery.xlsx --drive M:/ --output /out   # CLI
-```
-
----
-
-## photos_posted.py
-
-Build a CSV of photos posted on specific dates from `YYMMDD` folders.
-
-```bash
-python apps/photos_posted.py                          # GUI
-python apps/photos_posted.py /photos --output out.csv   # CLI
-```
-
----
-
-## photos_social.py
-
-Copy social-media originals listed in a CSV/XLSX into `YYMM/DD` folders.
-
-```bash
-python apps/photos_social.py                                                      # GUI
-python apps/photos_social.py --csv photos.xlsx --drive /Volumes/Memories --output /out   # CLI
-```
-
----
-
-## vocabulary.py
-
-GRE vocabulary pipeline: raw → cleaned → merged → JSON.
-
-```bash
-python apps/vocabulary.py                                                        # GUI
-python apps/vocabulary.py produce --input overall.txt --pronunciation pron.txt --output gre.json   # CLI
-```
-
----
-
-## test_files.py
-
-Generate synthetic camera-file sequences for testing.
-
-```bash
-python apps/test_files.py                # GUI
-python apps/test_files.py /test-root      # CLI
+python apps/epub2pdf_tool.py                            # GUI
+python apps/epub2pdf_tool.py input.epub --output out.pdf  # CLI
 ```
