@@ -1,8 +1,8 @@
 ﻿#!/usr/bin/env python3
 """Duplicate file remover - standalone program.
 
-Scans a directory (optionally subfolders), hashes every file with MD5, and
-lists duplicates for removal.
+Scans a directory (optionally subfolders), hashes every file with MD5, groups
+duplicates by content, and lets the user pick which copy(ies) to delete.
 
 Usage:
     python apps/duplicates.py <directory> [--no-subfolders] [--remove]
@@ -14,6 +14,7 @@ import argparse
 import os
 import sys
 import threading
+import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from typing import List, Optional
@@ -22,7 +23,6 @@ from typing import List, Optional
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils_lib import duplicate_remover  # noqa: E402
-from utils_lib.gui_common import set_output  # noqa: E402
 
 
 def run_cli(args: argparse.Namespace) -> int:
@@ -40,33 +40,16 @@ def run_cli(args: argparse.Namespace) -> int:
     return 0
 
 
-WELCOME = (
-    "Duplicate Remover\n"
-    "================\n"
-    "Finds files with identical content (by MD5 hash) and lists redundant copies.\n"
-    "\n"
-    "How to use:\n"
-    "  1. Click \"Open\" to choose a folder to scan.\n"
-    "  2. Check \"Include Subfolders\" to scan subdirectories too.\n"
-    "  3. Click \"Start\" to scan.\n"
-    "  4. Review the list of duplicates found.\n"
-    "  5. Click \"Remove\" to delete the redundant copies.\n"
-    "\n"
-    "Expected result:\n"
-    "  The report shows total files scanned, number of duplicates, and the\n"
-    "  redundant files. The first copy of each file is always kept; all later\n"
-    "  copies with the same MD5 are listed for removal."
-)
-
-
 def run_gui() -> int:
     root = tk.Tk()
     root.title("Duplicate Remover")
-    root.geometry("900x600")
+    root.geometry("960x680")
 
-    state = {"directory": None, "duplicates": []}
+    state = {"directory": None}
+    history: List[dict] = []  # {time, total, groups: [(md5, [paths])], checked: set[int]}
+    current = {"idx": -1}
 
-    # --- top row ---
+    # --- top row: open + dir + subfolders + scan ---
     top = ttk.Frame(root)
     top.pack(side="top", fill="x", padx=8, pady=4)
 
@@ -78,43 +61,141 @@ def run_gui() -> int:
 
     dir_var = tk.StringVar()
     ttk.Button(top, text="Open...", command=pick_dir).pack(side="left")
-    ttk.Entry(top, textvariable=dir_var, width=70).pack(side="left", padx=6)
+    ttk.Entry(top, textvariable=dir_var, width=60).pack(side="left", padx=6)
 
     sub_var = tk.BooleanVar(value=True)
     ttk.Checkbutton(top, text="Include Subfolders", variable=sub_var).pack(side="left", padx=6)
+
+    scan_btn = ttk.Button(top, text="Scan", command=None)
+    scan_btn.pack(side="left", padx=6)
 
     # --- progress row ---
     prog_frame = ttk.Frame(root)
     prog_frame.pack(side="top", fill="x", padx=8)
     progress = ttk.Progressbar(prog_frame, mode="determinate", maximum=1000)
     progress.pack(side="left", fill="x", expand=True)
-    status_var = tk.StringVar(value="Ready")
-    ttk.Label(prog_frame, textvariable=status_var, width=30, anchor="e").pack(side="left", padx=6)
+    status_var = tk.StringVar(
+        value="Ready - click Open to choose a folder, then Scan. Click a row to toggle delete."
+    )
+    ttk.Label(prog_frame, textvariable=status_var, width=60, anchor="e").pack(side="left", padx=6)
 
-    # --- output (with scrollbar) ---
-    out_frame = ttk.Frame(root)
-    out_frame.pack(side="top", fill="both", expand=True, padx=8, pady=4)
-    text = tk.Text(out_frame, wrap="word", font=("Consolas", 10))
-    vsb = ttk.Scrollbar(out_frame, command=text.yview)
-    text.configure(yscrollcommand=vsb.set, state="disabled")
+    # --- history row ---
+    hist_frame = ttk.Frame(root)
+    hist_frame.pack(side="top", fill="x", padx=8, pady=4)
+    ttk.Label(hist_frame, text="Scan history:").pack(side="left")
+    combo = ttk.Combobox(hist_frame, state="readonly", width=56)
+    combo.pack(side="left", padx=6)
+    combo.bind("<<ComboboxSelected>>", lambda e: on_history_select(combo.current()))
+
+    # --- duplicate files list (grouped, checkable) ---
+    list_frame = ttk.Frame(root)
+    list_frame.pack(side="top", fill="both", expand=True, padx=8, pady=4)
+    tree = ttk.Treeview(
+        list_frame, columns=("check", "path"), show="tree headings",
+        selectmode="none", height=20,
+    )
+    tree.heading("#0", text="Duplicate group")
+    tree.heading("check", text="Delete")
+    tree.heading("path", text="File (click to toggle)")
+    tree.column("#0", width=300, stretch=False)
+    tree.column("check", width=70, anchor="center", stretch=False)
+    tree.column("path", width=580, stretch=True)
+    vsb = ttk.Scrollbar(list_frame, command=tree.yview)
+    tree.configure(yscrollcommand=vsb.set)
     vsb.pack(side="right", fill="y")
-    text.pack(side="left", fill="both", expand=True)
-
-    set_output(text, WELCOME)
+    tree.pack(side="left", fill="both", expand=True)
 
     # --- buttons row ---
     btn_frame = ttk.Frame(root)
     btn_frame.pack(side="top", fill="x", padx=8, pady=4)
 
-    # shared state: written by worker thread, read by UI poll
-    scan_state = {"done": False, "result": None, "scanned": 0, "total": 0}
+    # ---------------------------------------------------------------- helpers
+
+    def refresh_combobox() -> None:
+        labels = [
+            f"Scan {i + 1} - {r['time']}  ({len(r['groups'])} groups, "
+            f"{sum(len(paths) for _, paths in r['groups'])} copies)"
+            for i, r in enumerate(history)
+        ]
+        combo["values"] = labels
+        if current["idx"] >= 0:
+            combo.current(current["idx"])
+
+    def update_remove_btn() -> None:
+        if current["idx"] < 0:
+            remove_btn.configure(text="Remove", state="disabled")
+            return
+        n = len(history[current["idx"]]["checked"])
+        remove_btn.configure(
+            text=f"Remove ({n})" if n else "Remove",
+            state="normal" if n else "disabled",
+        )
+
+    def flat_files(rec: dict) -> List[str]:
+        """Flatten group paths into one list; index == global file index."""
+        return [p for _, paths in rec["groups"] for p in paths]
+
+    def load_scan(idx: int) -> None:
+        rec = history[idx]
+        tree.delete(*tree.get_children())
+        fi = 0  # global file index across groups
+        for gi, (md5, paths) in enumerate(rec["groups"]):
+            tree.insert(
+                "", "end", iid=f"g{gi}",
+                text=f"Group {gi + 1} - md5 {md5[:8]}... ({len(paths)} copies)",
+                values=("", ""),
+                tags=("group",),
+            )
+            for p in paths:
+                mark = "[x]" if fi in rec["checked"] else "[ ]"
+                tree.insert("", "end", iid=f"f{fi}", text="", values=(mark, p))
+                fi += 1
+        n = len(rec["checked"])
+        if not rec["groups"]:
+            status_var.set(f"Scan {idx + 1}: no duplicate files found.")
+        else:
+            status_var.set(
+                f"Scan {idx + 1}: {len(rec['groups'])} groups, {fi} copies, "
+                f"{n} selected for removal"
+            )
+        update_remove_btn()
+
+    tree.tag_configure("group", background="#e8e8e8")
+
+    def on_history_select(idx: int) -> None:
+        if idx < 0 or idx == current["idx"]:
+            return
+        current["idx"] = idx
+        load_scan(idx)
+
+    def on_tree_click(event: object) -> None:
+        if current["idx"] < 0:
+            return
+        row = tree.identify("row", event.y)
+        if not row or not row.startswith("f"):
+            return  # only file rows are toggleable
+        i = int(row[1:])
+        rec = history[current["idx"]]
+        if i in rec["checked"]:
+            rec["checked"].discard(i)
+        else:
+            rec["checked"].add(i)
+        tree.set(row, "check", "[x]" if i in rec["checked"] else "[ ]")
+        update_remove_btn()
+
+    tree.bind("<Button-1>", on_tree_click)
+
+    # ------------------------------------------------------------- scanning
+
+    scan_state = {"done": False, "result": None, "calls": 0, "total": 0}
 
     def poll_progress() -> None:
-        """UI thread: update progress bar every 100ms."""
         if scan_state["done"]:
             return
         total = scan_state["total"]
-        n = scan_state["scanned"]
+        n = scan_state["calls"] // 2  # lib logs twice per file
+        if n > total:
+            n = total
         if total > 0:
             progress["value"] = (n / total) * 1000
             status_var.set(f"Scanning {n}/{total}")
@@ -124,15 +205,12 @@ def run_gui() -> int:
         d = state["directory"]
         from utils_lib.common import iter_files
         all_files = list(iter_files(d, sub_var.get()))
-        total = len(all_files)
-        scan_state["total"] = total
+        scan_state["total"] = len(all_files)
 
         def progress_log(msg: str) -> None:
-            # lib calls log(path) then log(checksum) per file;
-            # just bump the counter, don't touch the UI text.
-            scan_state["scanned"] += 1
+            scan_state["calls"] += 1
 
-        res = duplicate_remover.find_duplicates(
+        res = duplicate_remover.find_duplicate_groups(
             d, include_subfolders=sub_var.get(), log=progress_log
         )
         scan_state["result"] = res
@@ -141,44 +219,98 @@ def run_gui() -> int:
 
     def on_scan_done() -> None:
         res = scan_state["result"]
-        state["duplicates"] = res.duplicates
         progress["value"] = 1000 if scan_state["total"] else 0
-        status_var.set(f"Done - {len(res.duplicates)} duplicates")
-        set_output(text, duplicate_remover.format_report(res))
-        remove_btn.configure(state="normal" if res.duplicates else "disabled")
-        start_btn.configure(state="normal")
+        rec = {
+            "time": time.strftime("%H:%M:%S"),
+            "total": res.total,
+            "groups": res.groups,
+            "checked": set(),  # nothing selected by default: user picks locations
+        }
+        history.append(rec)
+        current["idx"] = len(history) - 1
+        refresh_combobox()
+        load_scan(current["idx"])
+        scan_btn.configure(state="normal")
 
     def start_scan() -> None:
         d = state["directory"]
         if not d:
-            set_output(text, "Please choose a directory first.")
+            status_var.set("Please choose a directory first.")
             return
-        start_btn.configure(state="disabled")
+        scan_btn.configure(state="disabled")
         remove_btn.configure(state="disabled")
-        set_output(text, f"Scanning {d} ...")
+        status_var.set(f"Scanning {d} ...")
         progress["value"] = 0
         scan_state["done"] = False
-        scan_state["scanned"] = 0
+        scan_state["calls"] = 0
         scan_state["total"] = 0
         threading.Thread(target=worker, daemon=True).start()
         root.after(100, poll_progress)
 
+    scan_btn.configure(command=start_scan)
+
+    # --------------------------------------------------------------- actions
+
+    def select_all() -> None:
+        """Check every copy of every group (deletes all copies)."""
+        if current["idx"] < 0:
+            return
+        rec = history[current["idx"]]
+        rec["checked"] = set(range(len(flat_files(rec))))
+        load_scan(current["idx"])
+
+    def keep_first() -> None:
+        """Keep the first copy of each group, check the rest (common dedup)."""
+        if current["idx"] < 0:
+            return
+        rec = history[current["idx"]]
+        checked = set()
+        fi = 0
+        for _, paths in rec["groups"]:
+            for j, _ in enumerate(paths):
+                if j > 0:
+                    checked.add(fi)
+                fi += 1
+        rec["checked"] = checked
+        load_scan(current["idx"])
+
+    def clear_all() -> None:
+        if current["idx"] < 0:
+            return
+        rec = history[current["idx"]]
+        rec["checked"] = set()
+        load_scan(current["idx"])
+
     def do_remove() -> None:
-        if not state["duplicates"]:
+        if current["idx"] < 0:
+            return
+        rec = history[current["idx"]]
+        files = flat_files(rec)
+        selected = [files[i] for i in sorted(rec["checked"])]
+        if not selected:
             return
         if not messagebox.askokcancel(
             "Remove",
-            f"You can't undo this action.\nRemove {len(state['duplicates'])} files?",
+            f"You can't undo this action.\nRemove {len(selected)} selected files?",
         ):
             return
-        duplicate_remover.remove_duplicates(state["duplicates"])
-        n = len(state["duplicates"])
-        state["duplicates"] = []
-        remove_btn.configure(state="disabled")
-        set_output(text, f"Removed {n} files.\n")
+        duplicate_remover.remove_duplicates(selected)
+        # rebuild groups without the deleted files
+        removed = set(selected)
+        new_groups = []
+        for md5, paths in rec["groups"]:
+            keep = [p for p in paths if p not in removed]
+            if len(keep) >= 2:
+                new_groups.append((md5, keep))
+        rec["groups"] = new_groups
+        rec["checked"] = set()
+        refresh_combobox()
+        load_scan(current["idx"])
+        status_var.set(f"Removed {len(selected)} files.")
 
-    start_btn = ttk.Button(btn_frame, text="Start", command=start_scan)
-    start_btn.pack(side="left")
+    ttk.Button(btn_frame, text="Select All", command=select_all).pack(side="left")
+    ttk.Button(btn_frame, text="Keep First", command=keep_first).pack(side="left", padx=6)
+    ttk.Button(btn_frame, text="Clear", command=clear_all).pack(side="left", padx=6)
     remove_btn = ttk.Button(btn_frame, text="Remove", command=do_remove)
     remove_btn.pack(side="left", padx=6)
     remove_btn.configure(state="disabled")

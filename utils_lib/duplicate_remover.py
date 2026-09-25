@@ -21,6 +21,48 @@ class DuplicateResult:
     seen: int = 0
 
 
+@dataclass
+class DuplicateGroupResult:
+    """All duplicate copies grouped by content hash.
+
+    groups: list of (md5, [paths]); only hashes that appeared >= 2 times.
+    total:  number of files scanned.
+    """
+    groups: List[Tuple[str, List[str]]] = field(default_factory=list)
+    total: int = 0
+
+
+def find_duplicate_groups(
+    directory: str,
+    include_subfolders: bool = True,
+    log: Optional[Callable[[str], None]] = None,
+) -> DuplicateGroupResult:
+    """Scan *directory* and group files by MD5, keeping *every* location.
+
+    Unlike find_duplicates (which keeps the first copy and lists the rest),
+    this returns all copies of each duplicated content, so the caller can
+    decide which location(s) to delete.
+    """
+    out = DuplicateGroupResult()
+    by_hash: dict = {}
+    log = log or (lambda s: None)
+    for path in iter_files(directory, include_subfolders):
+        log(path)
+        try:
+            checksum = get_md5_checksum(path)
+        except OSError:
+            continue
+        log(checksum)
+        by_hash.setdefault(checksum, []).append(path)
+    out.total = sum(len(v) for v in by_hash.values())
+    for h, paths in by_hash.items():
+        if len(paths) >= 2:
+            out.groups.append((h, sorted(paths)))
+    # Deterministic order: by first path of each group.
+    out.groups.sort(key=lambda g: g[1][0])
+    return out
+
+
 def find_duplicates(
     directory: str,
     include_subfolders: bool = True,
