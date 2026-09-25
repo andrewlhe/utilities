@@ -86,6 +86,24 @@ class FileManagerPanel(ttk.Frame):
 
         self.text = tk.Text(self, wrap="word", font=("Consolas", 11))
         self.text.pack(side="top", fill="both", expand=True)
+        self._set_text(
+            "File Manager\n"
+            "============\n"
+            "Batch copy or delete files whose names match a regular expression.\n"
+            "\n"
+            "How to use:\n"
+            "  1. Choose Mode: copy or delete.\n"
+            "  2. Pick Source (From) and Target (To) folders.\n"
+            "  3. Set the filename regex (e.g. .*\\.ARW). Leave empty for all files.\n"
+            "  4. Check \"Include subfolders\" if needed.\n"
+            "  5. Click \"Start\" to preview what will happen.\n"
+            "  6. Click \"Copy\" or \"Delete\" to perform the action.\n"
+            "\n"
+            "Expected result:\n"
+            "  Start shows a list of files and their destination (copy) or deletion.\n"
+            "  Execute performs the action. Copy mode preserves the directory structure\n"
+            "  under the target. Delete mode removes matching files."
+        )
 
     def _set_text(self, text: str) -> None:
         self.text.configure(state="normal")
