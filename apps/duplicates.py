@@ -91,19 +91,18 @@ def run_gui() -> int:
     list_frame = ttk.Frame(root)
     list_frame.pack(side="top", fill="both", expand=True, padx=8, pady=4)
     tree = ttk.Treeview(
-        list_frame, columns=("check", "path"), show="tree headings",
+        list_frame, columns=("check", "path"), show="headings",
         selectmode="none", height=20,
     )
-    tree.heading("#0", text="Duplicate group")
     tree.heading("check", text="Delete")
-    tree.heading("path", text="File (click to toggle)")
-    tree.column("#0", width=300, stretch=False)
-    tree.column("check", width=70, anchor="center", stretch=False)
-    tree.column("path", width=580, stretch=True)
+    tree.heading("path", text="File (click a row to toggle)")
+    tree.column("check", width=80, anchor="center", stretch=False)
+    tree.column("path", width=880, stretch=True)
     vsb = ttk.Scrollbar(list_frame, command=tree.yview)
     tree.configure(yscrollcommand=vsb.set)
     vsb.pack(side="right", fill="y")
     tree.pack(side="left", fill="both", expand=True)
+    tree.tag_configure("group", background="#ececec", foreground="#333333")
 
     # --- buttons row ---
     btn_frame = ttk.Frame(root)
@@ -142,13 +141,12 @@ def run_gui() -> int:
         for gi, (md5, paths) in enumerate(rec["groups"]):
             tree.insert(
                 "", "end", iid=f"g{gi}",
-                text=f"Group {gi + 1} - md5 {md5[:8]}... ({len(paths)} copies)",
-                values=("", ""),
+                values=("", f"---- Group {gi + 1}: md5 {md5[:8]}...  ({len(paths)} copies) ----"),
                 tags=("group",),
             )
             for p in paths:
                 mark = "[x]" if fi in rec["checked"] else "[ ]"
-                tree.insert("", "end", iid=f"f{fi}", text="", values=(mark, p))
+                tree.insert("", "end", iid=f"f{fi}", values=(mark, p))
                 fi += 1
         n = len(rec["checked"])
         if not rec["groups"]:
@@ -160,8 +158,6 @@ def run_gui() -> int:
             )
         update_remove_btn()
 
-    tree.tag_configure("group", background="#e8e8e8")
-
     def on_history_select(idx: int) -> None:
         if idx < 0 or idx == current["idx"]:
             return
@@ -171,7 +167,7 @@ def run_gui() -> int:
     def on_tree_click(event: object) -> None:
         if current["idx"] < 0:
             return
-        row = tree.identify("row", event.y)
+        row = tree.identify("row", event.x, event.y)
         if not row or not row.startswith("f"):
             return  # only file rows are toggleable
         i = int(row[1:])
