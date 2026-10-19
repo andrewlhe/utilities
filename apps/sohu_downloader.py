@@ -55,6 +55,10 @@ def run_cli(args: argparse.Namespace) -> int:
 
 
 class SohuPanel(ttk.Frame):
+    def __init__(self, master: tk.Misc) -> None:
+        super().__init__(master)
+        self._build()
+
     def _build(self) -> None:
         top = ttk.Frame(self)
         top.pack(side="top", fill="x")
