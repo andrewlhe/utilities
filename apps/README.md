@@ -66,3 +66,39 @@ See `README-epub2pdf.md` for details.
 python apps/epub2pdf_tool.py                            # GUI
 python apps/epub2pdf_tool.py input.epub --output out.pdf  # CLI
 ```
+
+---
+
+## sohu_downloader.py
+
+Download videos from Sohu TV (tv.sohu.com) by page URL or numeric video ID.
+Paste several links at once (one per line) in the GUI, or pass multiple on
+the command line. Downloads resume from where they stopped if interrupted.
+
+```bash
+python apps/sohu_downloader.py                                # GUI (default)
+python apps/sohu_downloader.py <url-or-vid>                   # CLI
+python apps/sohu_downloader.py url1 url2 ... -o D:\videos     # multiple + folder
+python apps/sohu_downloader.py 364197 -q 35                   # pick quality
+```
+
+Quality codes: `51`=超清 `35`=高清 `31`=标清 `21`=流畅 `1`=默认.
+No `-q` means "auto" (best available).
+
+---
+
+## video_bitrate.py
+
+Scan a folder for video files and list each file's video codec
+(H.264 / H.265 / other), video bitrate, total bitrate, duration and size.
+
+Requires [ffmpeg](https://ffmpeg.org/download.html) (ffprobe auto-detected on
+PATH and common locations). If ffprobe is missing, the GUI offers a
+"Set ffprobe..." button to point to ffprobe.exe manually (remembered for
+next time). Double-click a result row to reveal the file in Explorer.
+
+```bash
+python apps/video_bitrate.py                              # GUI
+python apps/video_bitrate.py /videos --recursive          # CLI
+python apps/video_bitrate.py /videos -r -o results.csv    # CLI + export CSV
+```

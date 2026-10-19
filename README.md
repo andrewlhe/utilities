@@ -30,6 +30,8 @@ Pass CLI arguments to use the command line.
 | `renumber.py` | Renumber a camera-file sequence (ARW/CR2/DNG/NEF/XMP/JPG/TIF...). |
 | `append_head.py` | Fix a gapped camera sequence: move the head run after the tail run. |
 | `epub2pdf_tool.py` | Convert EPUB to PDF via Calibre's `ebook-convert` (see `README-epub2pdf.md`). |
+| `video_bitrate.py` | List video codec (H.264/H.265/other) and bitrate for every video in a folder. |
+| `sohu_downloader.py` | Download videos from Sohu TV (tv.sohu.com) by page URL or video ID; supports multiple links and resume. |
 
 ```bash
 cd C:\Users\helew\Documents\utilities
