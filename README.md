@@ -27,7 +27,7 @@ Pass CLI arguments to use the command line.
 | --- | --- |
 | `duplicates.py` | Find duplicate files by MD5; pick which copies to delete (scan history, progress bar). |
 | `file_manager.py` | Batch copy / delete files whose names match a regex. |
-| `renumber.py` | Renumber a camera-file sequence (ARW/CR2/DNG/NEF/XMP/JPG/TIF...). |
+| `renumber.py` | Renumber a camera-file sequence (ARW/CR2/DNG/NEF/XMP/JPG/TIF...); preview the mapping, customise the naming rule (prefix / width / suffix). |
 | `append_head.py` | Fix a gapped camera sequence: move the head run after the tail run. |
 | `epub2pdf_tool.py` | Convert EPUB to PDF via Calibre's `ebook-convert` (see `README-epub2pdf.md`). |
 | `video_bitrate.py` | List video codec (H.264/H.265/other) and bitrate for every video in a folder. |

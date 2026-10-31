@@ -37,10 +37,20 @@ python apps/file_manager.py copy /from --to-dir /to --pattern ".*\.ARW" --execut
 
 Renumber a camera-file sequence (ARW/CR2/DNG/NEF/XMP/JPG/JPEG/TIF/TIFF).
 
+GUI: pick a directory, set Start / Step, optionally customise the naming rule
+(prefix, digit width, suffix — blank keeps the original) and an **Output
+folder** (blank = rename in place), click **Preview** to see the old → new
+mapping, then **Execute** to rename.
+
 ```bash
 python apps/renumber.py                      # GUI
-python apps/renumber.py /photos --start 0 --step 1   # CLI
+python apps/renumber.py /photos --start 0 --step 1   # CLI (default rule)
+python apps/renumber.py /photos --start 10 --step 2 --prefix IMG_ --width 4 --suffix .JPG  # custom rule
+python apps/renumber.py /photos --output-dir /new/location  # rename into another folder
 ```
+
+Naming rule: `<prefix><start + step*i:0<width>d><suffix>`. Unset parts keep
+each file's original prefix / digit width / extension.
 
 ---
 

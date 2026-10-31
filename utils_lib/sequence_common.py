@@ -6,10 +6,11 @@ import re
 from typing import Dict, List, Optional, Tuple
 
 # Extensions recognized by the original tools (case-insensitive match after upper-casing).
-FILE_EXTENSIONS = ["ARW", "CR2", "DNG", "NEF", "XMP", "JPG", "JPEG", "TIF", "TIFF"]
+FILE_EXTENSIONS = ["ARW", "CR2", "DNG", "NEF", "XMP", "JPG", "JPEG", "TIF", "TIFF", "HEIF", "HEIC"]
 
 _SUFFIX_RE = re.compile(r"(\.\w+)$")
 _NUMBER_RE = re.compile(r"(\d+)$")
+_ANY_NUMBER_RE = re.compile(r"(\d+)")
 
 
 def get_file_extension(file_name: str) -> str:
@@ -29,15 +30,18 @@ def get_components_for_file_name(file_name: str) -> Tuple[str, str, str]:
 
     Raises ValueError if the name does not end in an extension or digits.
     Mirrors the Java regex behaviour (suffix: last `.\\w+`; number: trailing digits).
+    The number is the *last* group of digits in the stem, so double-extension
+    names such as ``IMG_5835.HEIC.heif`` still resolve (number ``5835``).
     """
     m = _SUFFIX_RE.search(file_name)
     if not m:
         raise ValueError(f"no suffix in {file_name!r}")
     suffix = m.group(1)
     stem = file_name[: m.start()]
-    n = _NUMBER_RE.search(stem)
-    if not n:
+    nums = list(_ANY_NUMBER_RE.finditer(stem))
+    if not nums:
         raise ValueError(f"no trailing digits in {file_name!r}")
+    n = nums[-1]
     number = n.group(1)
     prefix = stem[: n.start()]
     return prefix, number, suffix
