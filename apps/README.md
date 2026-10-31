@@ -112,3 +112,24 @@ python apps/video_bitrate.py                              # GUI
 python apps/video_bitrate.py /videos --recursive          # CLI
 python apps/video_bitrate.py /videos -r -o results.csv    # CLI + export CSV
 ```
+
+---
+
+## heif2dng.py
+
+Convert iPhone HEIF/HEIC photos to 16-bit linear DNG (lossless, opens in
+Lightroom / Photoshop / ACR). Detects Display P3 vs sRGB, embeds the correct
+color matrix and all required DNG tags, preserves EXIF/GPS.
+
+```bash
+python apps/heif2dng.py                                    # GUI
+python apps/heif2dng.py --input "W:\Photos\HEIF"           # CLI (defaults: DNG folder next to source, uncompressed)
+python apps/heif2dng.py --input "W:\Photos\HEIF" --output "E:\dng" --force --jobs 4
+python apps/heif2dng.py --input "W:\Photos\HEIF" --output "E:\dng" --verify 5   # check DNGs (labels + color vs original)
+python apps/heif2dng.py --input "W:\Photos\HEIF" --dry-run # estimate size only
+```
+
+Compression: `uncompressed` (default, widest compatibility) or `deflate`
+(~1/3 size, Adobe-supported, but some third-party readers such as libraw do
+not read it). Note: HEIC is a finished image, not raw sensor data — the linear
+DNG's dynamic range does not exceed the original HEIF.

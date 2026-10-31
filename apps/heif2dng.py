@@ -1,34 +1,52 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-heif2dng.py — HEIF/HEIC 转 DNG 工具 v2（线性 DNG，16-bit，无损，Lightroom/ACR 兼容）
+heif2dng.py — HEIF/HEIC 转 DNG 工具（线性 DNG，16-bit，无损，Lightroom/ACR 兼容）
 
-v2 修复：
-  1) 修正致命标签号错误：50717 是 WhiteLevel（v1 误写成 CalibrationIlluminant=21，
-     导致 ACR 把白点判为 21/65535，整图过曝、色彩崩坏、Lightroom 拒收）；
-     CalibrationIlluminant1 实为 50778，v2 补写为 D50(23)。
-  2) 补全 DNG 必填/推荐标签：NewSubFileType、BlackLevel、WhiteLevel、DefaultScale、
-     DefaultCropOrigin、DefaultCropSize、BaselineExposure、BaselineNoise、
-     BaselineSharpness、LinearResponseLimit、AnalogBalance。
-  3) 正确色彩管线：iPhone HEIC 解码像素为 Display P3 色域（非 sRGB），
-     v2 按 P3 线性化并使用 P3->XYZ(D50) 色彩矩阵，CalibrationIlluminant1=D50。
+无参数运行打开图形界面；带参数走命令行（与其他工具一致）。
 
-用法:
-  python heif2dng.py --input "<HEIF文件夹>" [--output "<输出文件夹>"] \
-         [--compression deflate|uncompressed] [--force] [--dry-run] [--jobs N]
+CLI 用法:
+  python heif2dng.py --input "<HEIF文件夹>" [选项]
+  选项:
+    --output <目录>      输出目录（默认：源目录同级 DNG 文件夹）
+    --compression <模式> uncompressed(默认, 兼容性最好) | deflate(体积小约 1/3，
+                         Adobe 支持，但部分第三方读取器如 libraw 不认)
+    --force              覆盖已存在的 DNG 文件
+    --dry-run            只统计文件数和体积，不实际转换
+    --jobs N             并行线程数（默认 3）
+    --limit N            只处理前 N 个文件（0=全部，默认）
+    --verify [N]         验证输出 DNG（需配合 --input 源目录与 --output DNG 目录；
+                         抽查 N 个，默认 5，0=全部）：libraw(rawpy) 渲染对比原图
+                         + 关键标签核对，报告写入当前目录 verify_report.txt
 
 说明:
   HEIF/HEIC 是手机已处理完成的成品图像，不包含原始传感器数据。转换得到
   "线性 DNG"（16-bit 无损封装），Lightroom / Photoshop / ACR 可直接打开编辑，
   但动态范围/宽容度不会超过原 HEIF。
 
-依赖: pillow, pillow-heif, numpy, piexif
+v2 修复记录（针对"Lightroom 打不开 + 颜色错误"）:
+  1) 标签号致命错误：50717 是 WhiteLevel（曾误写成 CalibrationIlluminant=21，
+     导致 ACR 把白点判为 21/65535，整图过曝、Lightroom 拒收）；真正的
+     CalibrationIlluminant1 为 50778，现写为 D50(23)。
+  2) 补全 DNG 必填/推荐标签：NewSubFileType、BlackLevel、WhiteLevel、DefaultScale、
+     DefaultCropOrigin/Size、BaselineExposure/Noise/Sharpness、LinearResponseLimit、
+     AnalogBalance、AsShotNeutral。
+  3) 正确色彩管线：iPhone HEIC 解码像素为 Display P3 色域（非 sRGB），
+     按 P3 线性化并使用 P3->XYZ(D50) 色彩矩阵（Bradford 适应）。
+  4) 格式级：线性 DNG（已去马赛克的 RGB 数据）PhotometricInterpretation 必须用
+     34892(LinearRaw)，普通 2(RGB) 会被严格 raw 读取器拒绝。
+  5) UniqueCameraModel 改写为 "Apple <机型> (HEIC Linear)"，避免 ACR 按真实
+     iPhone 机型匹配相机校准配置。
+
+依赖: pillow, pillow-heif, numpy, piexif；--verify 另需 rawpy, tifffile
 """
 
 import argparse
+import io
 import shutil
 import struct
 import sys
+import threading
 import time
 import zlib
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -439,59 +457,28 @@ def collect_files(input_dir: Path):
     return sorted(files)
 
 
-def main():
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    if hasattr(sys.stderr, "reconfigure"):
-        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-
-    ap = argparse.ArgumentParser(description="HEIF/HEIC -> DNG (linear DNG, 16-bit, ACR 兼容)")
-    ap.add_argument("--input", required=True, help="HEIF 源文件夹")
-    ap.add_argument("--output", default=None, help="输出文件夹（默认：源文件夹同级 DNG 目录）")
-    ap.add_argument("--compression", choices=["deflate", "uncompressed"], default="uncompressed",
-                    help="压缩方式：uncompressed 兼容性最好（默认，libraw/ACR 均支持）；deflate 体积小但部分第三方读取器不支持")
-    ap.add_argument("--force", action="store_true", help="覆盖已存在的 DNG")
-    ap.add_argument("--dry-run", action="store_true", help="只统计，不转换")
-    ap.add_argument("--jobs", type=int, default=3, help="并行线程数（默认 3）")
-    ap.add_argument("--limit", type=int, default=0, help="只处理前 N 个文件（0=全部）")
-    args = ap.parse_args()
-
-    input_dir = Path(args.input)
-    if not input_dir.is_dir():
-        print(f"[错误] 输入文件夹不存在: {input_dir}")
-        sys.exit(1)
-    out_dir = Path(args.output) if args.output else input_dir.parent / "DNG"
-
+# ---------------- 转换主流程（CLI / GUI 共用） ----------------
+def run_conversion(input_dir, out_dir, compression, force, jobs, limit, log=print):
+    """返回 (成功数, 跳过数, 失败数, 总耗时秒)。"""
+    input_dir = Path(input_dir)
+    out_dir = Path(out_dir)
     files = collect_files(input_dir)
     if not files:
-        print(f"[提示] 文件夹里没有 {sorted(EXTS)} 文件: {input_dir}")
-        return
-    if args.limit > 0:
-        files = files[:args.limit]
+        log(f"[提示] 文件夹里没有 {sorted(EXTS)} 文件: {input_dir}")
+        return 0, 0, 0, 0.0
+    if limit > 0:
+        files = files[:limit]
 
     total_mb = sum(p.stat().st_size for p in files) / (1024 * 1024)
-    print(f"找到 {len(files)} 个文件，总大小 {total_mb:.1f} MB")
-
-    if args.dry_run:
-        n = min(len(files), 200)
-        sample = files[:n]
-        est = sum(
-            pillow_heif.open_heif(str(p)).size[0] * pillow_heif.open_heif(str(p)).size[1] * 6
-            for p in sample
-        )
-        est = est * (len(files) / n)  # 按比例外推到全部文件
-        est = est * 0.35 if args.compression == "deflate" else est
-        print(f"[dry-run] 估算输出约 {est / (1024**3):.1f} GB（{args.compression}）")
-        return
+    log(f"找到 {len(files)} 个文件，总大小 {total_mb:.1f} MB")
+    log(f"输出到: {out_dir}  |  压缩: {compression}  |  线程: {jobs}")
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    free_mb = shutil.disk_usage(out_dir).free / (1024 * 1024)
-    print(f"输出到: {out_dir}  |  压缩: {args.compression}  |  线程: {args.jobs}")
 
     todo = []
     for src in files:
         out_path = out_dir / (src.stem + ".dng")
-        if out_path.exists() and not args.force:
+        if out_path.exists() and not force:
             continue
         todo.append((src, out_path))
 
@@ -504,13 +491,13 @@ def main():
         src, out = item
         t = time.time()
         try:
-            name, _, _ = convert_one(src, out, args.compression)
+            name, _, _ = convert_one(src, out, compression)
             return src, out, True, "", time.time() - t, name
         except Exception as e:
             return src, out, False, f"{type(e).__name__}: {e}", time.time() - t, src.name
 
-    if args.jobs > 1 and len(todo) > 1:
-        with ThreadPoolExecutor(max_workers=args.jobs) as ex:
+    if jobs > 1 and len(todo) > 1:
+        with ThreadPoolExecutor(max_workers=jobs) as ex:
             futs = {ex.submit(run, item): item for item in todo}
             done = 0
             for fut in as_completed(futs):
@@ -518,19 +505,19 @@ def main():
                 src, out, is_ok, err, dt, name = fut.result()
                 if is_ok:
                     ok += 1
-                    print(f"[{done}/{len(todo)}] {name} -> {out.name}  ({dt:.1f}s)", flush=True)
+                    log(f"[{done}/{len(todo)}] {name} -> {out.name}  ({dt:.1f}s)")
                 else:
                     failed.append((src.name, err))
-                    print(f"[{done}/{len(todo)}] 失败 {name}: {err}", flush=True)
+                    log(f"[{done}/{len(todo)}] 失败 {name}: {err}")
     else:
         for i, item in enumerate(todo, 1):
             src, out, is_ok, err, dt, name = run(item)
             if is_ok:
                 ok += 1
-                print(f"[{i}/{len(todo)}] {name} -> {out.name}  ({dt:.1f}s)", flush=True)
+                log(f"[{i}/{len(todo)}] {name} -> {out.name}  ({dt:.1f}s)")
             else:
                 failed.append((src.name, err))
-                print(f"[{i}/{len(todo)}] 失败 {name}: {err}", flush=True)
+                log(f"[{i}/{len(todo)}] 失败 {name}: {err}")
 
     total = time.time() - t0
     out_size_mb = 0
@@ -540,14 +527,281 @@ def main():
         dng_count += 1
     out_size_mb /= 1024 * 1024
 
-    print("-" * 60)
-    print(f"完成：成功 {ok}，跳过 {skipped}，失败 {len(failed)}，耗时 {total:.0f}s")
-    print(f"输出体积：{out_size_mb / 1024:.2f} GB（{dng_count} 个文件）")
+    log("-" * 60)
+    log(f"完成：成功 {ok}，跳过 {skipped}，失败 {len(failed)}，耗时 {total:.0f}s")
+    log(f"输出体积：{out_size_mb / 1024:.2f} GB（{dng_count} 个文件）")
     if failed:
-        print("失败清单：")
+        log("失败清单：")
         for name, err in failed:
-            print(f"  {name}: {err}")
+            log(f"  {name}: {err}")
+    return ok, skipped, len(failed), total
+
+
+# ---------------- 验证（--verify） ----------------
+def cmd_verify(src_dir: Path, out_dir: Path, limit: int) -> int:
+    try:
+        import rawpy
+        import tifffile
+        from PIL import Image, ImageCms
+    except ImportError as e:
+        print(f"[错误] --verify 需要 rawpy / tifffile / Pillow，缺少: {e}")
+        return 1
+
+    out_dir = Path(out_dir)
+    src_dir = Path(src_dir)
+    dngs = sorted(out_dir.glob("*.dng"))
+    if not dngs:
+        print(f"[错误] {out_dir} 中没有 DNG 文件")
+        return 1
+    if limit > 0:
+        idx = np.linspace(0, len(dngs) - 1, min(limit, len(dngs))).astype(int)
+        dngs = [dngs[i] for i in idx]
+
+    lines = []
+    def log(s):
+        lines.append(str(s))
+        print(str(s), flush=True)
+
+    log(f"验证 {len(dngs)} 个 DNG（源: {src_dir}）")
+    ok_all = True
+    for dng in dngs:
+        log("==" + dng.name)
+        try:
+            with tifffile.TiffFile(dng) as tf:
+                t = tf.pages[0].tags
+                phot = t[262].value
+                wl = list(t[50717].value)
+                cal = t[50778].value
+                log(f"  Photometric={phot} WhiteLevel={wl} CalIllum1={cal}")
+                if phot != PHOTOMETRIC_LINEAR_RAW or wl != [65535] * 3 or cal != 23:
+                    log("  [异常] 关键标签不正确")
+                    ok_all = False
+        except Exception as e:
+            log(f"  tifffile 读取失败: {e!r}")
+            ok_all = False
+            continue
+        try:
+            with rawpy.imread(str(dng)) as r:
+                rgb = r.postprocess(use_camera_wb=True, no_auto_bright=False)
+        except Exception as e:
+            log(f"  rawpy 打开/渲染失败: {e!r}")
+            ok_all = False
+            continue
+        src = src_dir / (dng.stem + ".heif")
+        if not src.exists():
+            src = src_dir / (dng.stem + ".heic")
+        if not src.exists():
+            log("  找不到对应源文件，跳过对比")
+            continue
+        try:
+            hf = pillow_heif.open_heif(str(src))
+            img = hf.to_pillow().convert("RGB")
+            icc = hf.info.get("icc_profile")
+            if icc:
+                prof = ImageCms.ImageCmsProfile(io.BytesIO(icc))
+                srgb = ImageCms.createProfile("sRGB")
+                img = ImageCms.profileToProfile(img, prof, srgb, renderingIntent=0, outputMode="RGB")
+            orig = np.asarray(img).astype(np.float32)
+            if rgb.shape[:2] == orig.shape[:2]:
+                d = np.abs(rgb.astype(np.float32) - orig)
+                mean = float(d.mean())
+                per = [round(float(v), 2) for v in d.mean(axis=(0, 1))]
+                log(f"  渲染与原图(ICC->sRGB)均差: {mean:.2f}  分通道: {per}")
+                if mean > 40:
+                    log("  [提示] 均差较大，请检查色彩")
+                    ok_all = False
+            else:
+                log(f"  尺寸不一致 render={rgb.shape} orig={orig.shape}")
+        except Exception as e:
+            log(f"  原图对比失败: {e!r}")
+
+    log("-" * 60)
+    log("验证结论: " + ("全部通过" if ok_all else "存在异常，见上"))
+    report = Path.cwd() / "verify_report.txt"
+    try:
+        report.write_text("\n".join(lines), encoding="utf-8")
+        log(f"报告已写入: {report}")
+    except Exception:
+        pass
+    return 0 if ok_all else 1
+
+
+# ---------------- 图形界面（无参数运行） ----------------
+def run_gui() -> int:
+    try:
+        import tkinter as tk
+        from tkinter import filedialog, messagebox, ttk
+    except Exception as e:
+        print(f"[错误] 无法启动图形界面（{e}）。请改用命令行：python heif2dng.py --input ...")
+        return 1
+
+    try:
+        root = tk.Tk()
+    except Exception as e:
+        print(f"[错误] 当前 Python 缺少 Tcl/Tk 组件，无法显示图形界面（{e}）。")
+        print("请改用命令行：python heif2dng.py --input \"HEIF文件夹\" [选项]；")
+        print("或在装有完整版 Python（python.org 安装版）的环境下直接运行本文件打开界面。")
+        return 1
+    root.title("HEIF → DNG 转换器")
+    root.geometry("640x520")
+    root.minsize(560, 460)
+
+    src_var = tk.StringVar()
+    out_var = tk.StringVar()
+    comp_var = tk.StringVar(value="uncompressed")
+    jobs_var = tk.IntVar(value=3)
+    force_var = tk.BooleanVar(value=False)
+    status_var = tk.StringVar(value="就绪")
+
+    pad = {"padx": 8, "pady": 4}
+
+    def pick_src():
+        d = filedialog.askdirectory(title="选择 HEIF/HEIC 源文件夹")
+        if d:
+            src_var.set(d)
+
+    def pick_out():
+        d = filedialog.askdirectory(title="选择 DNG 输出文件夹")
+        if d:
+            out_var.set(d)
+
+    frm = ttk.Frame(root, padding=12)
+    frm.pack(fill="both", expand=True)
+
+    ttk.Label(frm, text="源文件夹（HEIF/HEIC）:").grid(row=0, column=0, sticky="w", **pad)
+    ttk.Entry(frm, textvariable=src_var, width=50).grid(row=0, column=1, sticky="we", **pad)
+    ttk.Button(frm, text="浏览…", command=pick_src).grid(row=0, column=2, **pad)
+
+    ttk.Label(frm, text="输出文件夹（留空=源目录同级 DNG）:").grid(row=1, column=0, sticky="w", **pad)
+    ttk.Entry(frm, textvariable=out_var, width=50).grid(row=1, column=1, sticky="we", **pad)
+    ttk.Button(frm, text="浏览…", command=pick_out).grid(row=1, column=2, **pad)
+
+    ttk.Label(frm, text="压缩方式:").grid(row=2, column=0, sticky="w", **pad)
+    cframe = ttk.Frame(frm)
+    cframe.grid(row=2, column=1, sticky="w", **pad)
+    ttk.Radiobutton(cframe, text="uncompressed（兼容性最好，体积大）", variable=comp_var,
+                    value="uncompressed").pack(side="left")
+    ttk.Radiobutton(cframe, text="deflate（体积小，Adobe 支持）", variable=comp_var,
+                    value="deflate").pack(side="left", padx=(12, 0))
+
+    ttk.Label(frm, text="并行线程数:").grid(row=3, column=0, sticky="w", **pad)
+    ttk.Spinbox(frm, from_=1, to=8, textvariable=jobs_var, width=6).grid(row=3, column=1, sticky="w", **pad)
+
+    ttk.Checkbutton(frm, text="覆盖已存在的 DNG", variable=force_var).grid(row=4, column=1, sticky="w", **pad)
+
+    log_box = tk.Text(frm, height=16, wrap="word", state="disabled")
+    log_box.grid(row=5, column=0, columnspan=3, sticky="nsew", pady=8)
+    frm.rowconfigure(5, weight=1)
+    frm.columnconfigure(1, weight=1)
+
+    btn_frame = ttk.Frame(frm)
+    btn_frame.grid(row=6, column=0, columnspan=3, sticky="ew", pady=4)
+    start_btn = ttk.Button(btn_frame, text="开始转换")
+    start_btn.pack(side="left")
+    ttk.Label(btn_frame, textvariable=status_var).pack(side="left", padx=12)
+
+    def log(msg):
+        log_box.configure(state="normal")
+        log_box.insert("end", str(msg) + "\n")
+        log_box.see("end")
+        log_box.configure(state="disabled")
+        root.update_idletasks()
+
+    def do_start():
+        src = src_var.get().strip()
+        if not src:
+            messagebox.showwarning("提示", "请选择源文件夹")
+            return
+        if not Path(src).is_dir():
+            messagebox.showerror("错误", f"源文件夹不存在: {src}")
+            return
+        out = out_var.get().strip() or str(Path(src).parent / "DNG")
+        comp = comp_var.get()
+        jobs = jobs_var.get()
+        force = force_var.get()
+        start_btn.configure(state="disabled")
+        status_var.set("转换中…")
+
+        def worker():
+            try:
+                run_conversion(src, out, comp, force, jobs, 0, log=log)
+            except Exception as e:
+                log(f"[错误] {e!r}")
+            finally:
+                root.after(0, lambda: (start_btn.configure(state="normal"),
+                                       status_var.set("完成")))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    start_btn.configure(command=do_start)
+    root.mainloop()
+    return 0
+
+
+# ---------------- CLI 入口 ----------------
+def main() -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
+    ap = argparse.ArgumentParser(
+        description="HEIF/HEIC -> DNG (线性 DNG, 16-bit, Lightroom/ACR 兼容)。无参数运行打开图形界面。")
+    ap.add_argument("--input", default=None, help="HEIF 源文件夹")
+    ap.add_argument("--output", default=None, help="输出文件夹（默认：源文件夹同级 DNG 目录）")
+    ap.add_argument("--compression", choices=["deflate", "uncompressed"], default="uncompressed",
+                    help="压缩方式：uncompressed 兼容性最好（默认）；deflate 体积小但部分第三方读取器不支持")
+    ap.add_argument("--force", action="store_true", help="覆盖已存在的 DNG")
+    ap.add_argument("--dry-run", action="store_true", help="只统计，不转换")
+    ap.add_argument("--jobs", type=int, default=3, help="并行线程数（默认 3）")
+    ap.add_argument("--limit", type=int, default=0, help="只处理前 N 个文件（0=全部）")
+    ap.add_argument("--verify", nargs="?", const=5, type=int, default=None, metavar="N",
+                    help="验证输出 DNG（抽查 N 个，默认 5，0=全部），需配合 --input 与 --output")
+    args = ap.parse_args()
+
+    if args.verify is not None:
+        if not args.input or not args.output:
+            print("[错误] --verify 需要同时指定 --input（HEIF 源目录）和 --output（DNG 目录）")
+            return 1
+        return cmd_verify(Path(args.input), Path(args.output), args.verify)
+
+    if not args.input:
+        ap.print_help()
+        print("\n[提示] 未指定 --input；直接运行不带参数可打开图形界面。")
+        return 1
+
+    input_dir = Path(args.input)
+    if not input_dir.is_dir():
+        print(f"[错误] 输入文件夹不存在: {input_dir}")
+        return 1
+    out_dir = Path(args.output) if args.output else input_dir.parent / "DNG"
+
+    if args.dry_run:
+        files = collect_files(input_dir)
+        if not files:
+            print(f"[提示] 文件夹里没有 {sorted(EXTS)} 文件: {input_dir}")
+            return 0
+        if args.limit > 0:
+            files = files[:args.limit]
+        total_mb = sum(p.stat().st_size for p in files) / (1024 * 1024)
+        print(f"找到 {len(files)} 个文件，总大小 {total_mb:.1f} MB")
+        n = min(len(files), 200)
+        sample = files[:n]
+        est = sum(
+            pillow_heif.open_heif(str(p)).size[0] * pillow_heif.open_heif(str(p)).size[1] * 6
+            for p in sample
+        )
+        est = est * (len(files) / n)  # 按比例外推到全部文件
+        est = est * 0.35 if args.compression == "deflate" else est
+        print(f"[dry-run] 估算输出约 {est / (1024**3):.1f} GB（{args.compression}）")
+        return 0
+
+    run_conversion(input_dir, out_dir, args.compression, args.force, args.jobs, args.limit)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1:
+        sys.exit(main())
+    else:
+        sys.exit(run_gui())
